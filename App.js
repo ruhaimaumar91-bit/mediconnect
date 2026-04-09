@@ -1450,3 +1450,170 @@ function ProfileScreen({ user, onLogout }) {
     </ScrollView>
   );
 }
+// ==================== MAIN APP WITH NAVIGATION ====================
+function MainApp({ user, onLogout }) {
+  const [activeTab, setActiveTab] = useState('home');
+  const [screen, setScreen] = useState('home');
+  const [screenParams, setScreenParams] = useState({});
+
+  const navigate = (screenName, params = {}) => {
+    setScreen(screenName);
+    setScreenParams(params);
+  };
+
+  const goBack = () => {
+    setScreen(activeTab);
+    setScreenParams({});
+  };
+
+  const switchTab = (tabName) => {
+    setActiveTab(tabName);
+    setScreen(tabName);
+    setScreenParams({});
+  };
+
+  // Full screen overlays (no tab bar)
+  if (screen === 'doctorProfile') {
+    return (
+      <DoctorProfileScreen
+        doctor={screenParams.doctor}
+        user={user}
+        onNavigate={navigate}
+        onBack={goBack}
+      />
+    );
+  }
+
+  if (screen === 'bookAppointment') {
+    return (
+      <BookAppointmentScreen
+        doctor={screenParams.doctor}
+        user={user}
+        onBack={goBack}
+        onSuccess={() => switchTab('appointments')}
+      />
+    );
+  }
+
+  const tabs = [
+    { id: 'home', icon: '🏠', label: 'Home' },
+    { id: 'search', icon: '🔍', label: 'Search' },
+    { id: 'appointments', icon: '📅', label: 'Bookings' },
+    { id: 'orders', icon: '📦', label: 'Orders' },
+    { id: 'pharmacy', icon: '💊', label: 'Pharmacy' },
+    { id: 'profile', icon: '👤', label: 'Profile' },
+  ];
+
+  return (
+    <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+      {/* Screen Content */}
+      <View style={{ flex: 1 }}>
+        {activeTab === 'home' && (
+          <HomeScreen
+            user={user}
+            onNavigate={(s, p) => {
+              if (['search', 'pharmacy', 'appointments', 'orders', 'profile'].includes(s)) {
+                switchTab(s);
+              } else {
+                navigate(s, p);
+              }
+            }}
+          />
+        )}
+        {activeTab === 'search' && (
+          <SearchScreen
+            onNavigate={navigate}
+            initialSpecialty={screenParams.specialty}
+          />
+        )}
+        {activeTab === 'appointments' && (
+          <AppointmentsScreen user={user} />
+        )}
+        {activeTab === 'orders' && (
+          <OrderTrackingScreen user={user} />
+        )}
+        {activeTab === 'pharmacy' && (
+          <PharmacyScreen user={user} onNavigate={navigate} />
+        )}
+        {activeTab === 'profile' && (
+          <ProfileScreen user={user} onLogout={onLogout} />
+        )}
+      </View>
+
+      {/* Bottom Tab Bar */}
+      <View style={{
+        flexDirection: 'row',
+        backgroundColor: COLORS.white,
+        borderTopWidth: 1,
+        borderTopColor: COLORS.border,
+        paddingBottom: 24,
+        paddingTop: 10,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.06,
+        shadowRadius: 12,
+        elevation: 10,
+      }}>
+        {tabs.map((tab) => (
+          <TouchableOpacity
+            key={tab.id}
+            style={{ flex: 1, alignItems: 'center' }}
+            onPress={() => switchTab(tab.id)}
+          >
+            <View style={{
+              width: activeTab === tab.id ? 36 : 0,
+              height: 3,
+              backgroundColor: COLORS.primary,
+              borderRadius: 2,
+              marginBottom: 6,
+            }} />
+            <Text style={{ fontSize: activeTab === tab.id ? 24 : 22, marginBottom: 2 }}>{tab.icon}</Text>
+            <Text style={{
+              fontSize: 10,
+              fontWeight: activeTab === tab.id ? '700' : '500',
+              color: activeTab === tab.id ? COLORS.primary : COLORS.gray,
+            }}>
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+// ==================== APP ENTRY POINT ====================
+export default function App() {
+  const [screen, setScreen] = useState('splash');
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      if (session) setScreen('main');
+      else setScreen('splash');
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      if (session) setScreen('main');
+      else setScreen('onboarding');
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setScreen('onboarding');
+  };
+
+  if (screen === 'splash') return <SplashScreen onDone={() => setScreen('onboarding')} />;
+  if (screen === 'onboarding') return <OnboardingScreen onDone={() => setScreen('login')} onLogin={() => setScreen('login')} />;
+  if (screen === 'login') return <LoginScreen onLogin={(u) => { setUser(u); setScreen('main'); }} onRegister={() => setScreen('register')} />;
+  if (screen === 'register') return <RegisterScreen onRegister={() => setScreen('login')} onLogin={() => setScreen('login')} />;
+  if (screen === 'main') return <MainApp user={user} onLogout={handleLogout} />;
+
+  return null;
+}
