@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, TextInput,
+  View, Text, TouchableOpacity, TextInput,
   ScrollView, FlatList, ActivityIndicator, Alert,
-  Animated, Dimensions, StatusBar, Modal, SafeAreaView,
+  Animated, Dimensions, StatusBar, Modal,
 } from 'react-native';
 import { createClient } from '@supabase/supabase-js';
 
@@ -22,6 +22,7 @@ const COLORS = {
   background: '#F9FAFB',
 };
 
+// ==================== DATA ====================
 const SPECIALTIES = [
   { id: '1', name: 'Cardiology', icon: '❤️', color: '#FEE2E2' },
   { id: '2', name: 'Neurology', icon: '🧠', color: '#EDE9FE' },
@@ -58,12 +59,12 @@ const SAMPLE_MEDICATIONS = [
 ];
 
 const PAYMENT_METHODS = [
-  { id: '1', type: 'visa', label: 'Visa', icon: '💳', color: '#1A1F71', last4: '4242' },
-  { id: '2', type: 'mastercard', label: 'Mastercard', icon: '💳', color: '#EB001B', last4: '5555' },
-  { id: '3', type: 'amex', label: 'Amex', icon: '💳', color: '#2E77BC', last4: '0005' },
-  { id: '4', type: 'applepay', label: 'Apple Pay', icon: '🍎', color: '#000000', last4: null },
-  { id: '5', type: 'googlepay', label: 'Google Pay', icon: '🔵', color: '#4285F4', last4: null },
-  { id: '6', type: 'paypal', label: 'PayPal', icon: '🅿️', color: '#003087', last4: null },
+  { id: '1', type: 'visa', label: 'Visa', icon: '💳', color: '#1A1F71' },
+  { id: '2', type: 'mastercard', label: 'Mastercard', icon: '💳', color: '#EB001B' },
+  { id: '3', type: 'amex', label: 'Amex', icon: '💳', color: '#2E77BC' },
+  { id: '4', type: 'applepay', label: 'Apple Pay', icon: '🍎', color: '#000000' },
+  { id: '5', type: 'googlepay', label: 'Google Pay', icon: '🔵', color: '#4285F4' },
+  { id: '6', type: 'paypal', label: 'PayPal', icon: '🅿️', color: '#003087' },
 ];
 // ==================== SPLASH SCREEN ====================
 function SplashScreen({ onDone }) {
@@ -88,7 +89,9 @@ function SplashScreen({ onDone }) {
         <Text style={{ fontSize: 16, color: 'rgba(255,255,255,0.8)', marginTop: 8 }}>Your Health, Delivered</Text>
       </Animated.View>
       <View style={{ position: 'absolute', bottom: 50, alignItems: 'center' }}>
-        <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.7)', textAlign: 'center', lineHeight: 22 }}>Connecting you to healthcare,{'\n'}anytime, anywhere.</Text>
+        <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.7)', textAlign: 'center', lineHeight: 22 }}>
+          Connecting you to healthcare,{'\n'}anytime, anywhere.
+        </Text>
       </View>
     </View>
   );
@@ -116,7 +119,12 @@ function OnboardingScreen({ onDone, onLogin }) {
       <TouchableOpacity style={{ position: 'absolute', top: 50, right: 20, zIndex: 10, padding: 10 }} onPress={onDone}>
         <Text style={{ fontSize: 14, color: COLORS.gray, fontWeight: '500' }}>Skip</Text>
       </TouchableOpacity>
-      <FlatList ref={flatListRef} data={slides} horizontal pagingEnabled showsHorizontalScrollIndicator={false}
+      <FlatList
+        ref={flatListRef}
+        data={slides}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
         keyExtractor={(item) => item.id}
         onMomentumScrollEnd={(e) => setCurrentIndex(Math.round(e.nativeEvent.contentOffset.x / width))}
         renderItem={({ item }) => (
@@ -295,11 +303,12 @@ function HomeScreen({ user, onNavigate }) {
       </View>
 
       <View style={{ padding: 24 }}>
+        {/* Quick Actions */}
         <View style={{ flexDirection: 'row', gap: 12, marginBottom: 24 }}>
           {[
             { icon: '👨‍⚕️', label: 'Find Doctor', screen: 'search' },
             { icon: '💊', label: 'Pharmacy', screen: 'pharmacy' },
-            { icon: '📅', label: 'My Bookings', screen: 'appointments' },
+            { icon: '📋', label: 'Activity', screen: 'activity' },
           ].map((item) => (
             <TouchableOpacity key={item.label} style={{ flex: 1, backgroundColor: COLORS.white, borderRadius: 16, padding: 16, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }} onPress={() => onNavigate(item.screen)}>
               <Text style={{ fontSize: 30, marginBottom: 8 }}>{item.icon}</Text>
@@ -308,6 +317,7 @@ function HomeScreen({ user, onNavigate }) {
           ))}
         </View>
 
+        {/* Delivery Banner */}
         <View style={{ backgroundColor: COLORS.primary, borderRadius: 16, padding: 20, marginBottom: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 18, fontWeight: 'bold', color: COLORS.white, marginBottom: 6 }}>💊 Medications Delivered</Text>
@@ -319,6 +329,7 @@ function HomeScreen({ user, onNavigate }) {
           <Text style={{ fontSize: 60 }}>🚚</Text>
         </View>
 
+        {/* Browse by Specialty */}
         <Text style={{ fontSize: 20, fontWeight: 'bold', color: COLORS.text, marginBottom: 16 }}>Browse by Specialty</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
           {SPECIALTIES.map((specialty) => (
@@ -331,6 +342,7 @@ function HomeScreen({ user, onNavigate }) {
           ))}
         </View>
 
+        {/* Top Doctors */}
         <Text style={{ fontSize: 20, fontWeight: 'bold', color: COLORS.text, marginBottom: 16 }}>Top Doctors</Text>
         {SAMPLE_DOCTORS.slice(0, 3).map((doctor) => (
           <TouchableOpacity key={doctor.id} style={{ backgroundColor: COLORS.white, borderRadius: 16, padding: 16, marginBottom: 12, flexDirection: 'row', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }} onPress={() => onNavigate('doctorProfile', { doctor })}>
@@ -356,6 +368,7 @@ function HomeScreen({ user, onNavigate }) {
           <Text style={{ fontSize: 15, fontWeight: 'bold', color: COLORS.primary }}>View All Doctors →</Text>
         </TouchableOpacity>
 
+        {/* How It Works */}
         <View style={{ backgroundColor: COLORS.secondary, borderRadius: 16, padding: 20, marginBottom: 24 }}>
           <Text style={{ fontSize: 18, fontWeight: 'bold', color: COLORS.white, marginBottom: 16 }}>How It Works</Text>
           {[
@@ -389,7 +402,11 @@ function SearchScreen({ onNavigate, initialSpecialty }) {
   useEffect(() => {
     let filtered = SAMPLE_DOCTORS;
     if (selectedSpecialty) filtered = filtered.filter(d => d.specialty === selectedSpecialty);
-    if (searchQuery) filtered = filtered.filter(d => d.full_name.toLowerCase().includes(searchQuery.toLowerCase()) || d.specialty.toLowerCase().includes(searchQuery.toLowerCase()) || d.location.toLowerCase().includes(searchQuery.toLowerCase()));
+    if (searchQuery) filtered = filtered.filter(d =>
+      d.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      d.specialty.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      d.location.toLowerCase().includes(searchQuery.toLowerCase())
+    );
     setDoctors(filtered);
   }, [searchQuery, selectedSpecialty]);
   return (
@@ -412,8 +429,16 @@ function SearchScreen({ onNavigate, initialSpecialty }) {
           </TouchableOpacity>
         ))}
       </ScrollView>
-      <FlatList data={doctors} keyExtractor={(item) => item.id} contentContainerStyle={{ padding: 16 }}
-        ListEmptyComponent={<View style={{ alignItems: 'center', padding: 40 }}><Text style={{ fontSize: 40, marginBottom: 16 }}>🔍</Text><Text style={{ fontSize: 16, color: COLORS.textLight }}>No doctors found</Text></View>}
+      <FlatList
+        data={doctors}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={{ padding: 16 }}
+        ListEmptyComponent={
+          <View style={{ alignItems: 'center', padding: 40 }}>
+            <Text style={{ fontSize: 40, marginBottom: 16 }}>🔍</Text>
+            <Text style={{ fontSize: 16, color: COLORS.textLight }}>No doctors found</Text>
+          </View>
+        }
         renderItem={({ item }) => (
           <TouchableOpacity style={{ backgroundColor: COLORS.white, borderRadius: 16, padding: 16, marginBottom: 12, flexDirection: 'row', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }} onPress={() => onNavigate('doctorProfile', { doctor: item })}>
             <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: COLORS.primaryLight, justifyContent: 'center', alignItems: 'center', marginRight: 14 }}>
@@ -459,6 +484,7 @@ function DoctorProfileScreen({ doctor, onNavigate, onBack }) {
           <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.7)' }}>📍 {doctor.location}</Text>
         </View>
       </View>
+
       <View style={{ flexDirection: 'row', backgroundColor: COLORS.white, marginHorizontal: 24, marginTop: -20, borderRadius: 16, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 5, marginBottom: 16 }}>
         <View style={{ flex: 1, alignItems: 'center' }}>
           <Text style={{ fontSize: 20, fontWeight: 'bold', color: COLORS.primary }}>{doctor.rating}</Text>
@@ -475,6 +501,7 @@ function DoctorProfileScreen({ doctor, onNavigate, onBack }) {
           <Text style={{ fontSize: 12, color: COLORS.textLight }}>Per Visit</Text>
         </View>
       </View>
+
       <ScrollView style={{ flex: 1, paddingHorizontal: 24 }}>
         <View style={{ flexDirection: 'row', marginBottom: 16, backgroundColor: COLORS.lightGray, borderRadius: 12, padding: 4 }}>
           {['about', 'availability'].map((tab) => (
@@ -513,6 +540,7 @@ function DoctorProfileScreen({ doctor, onNavigate, onBack }) {
           </View>
         )}
       </ScrollView>
+
       <View style={{ padding: 24, backgroundColor: COLORS.white, borderTopWidth: 1, borderTopColor: COLORS.border }}>
         <TouchableOpacity style={{ backgroundColor: COLORS.primary, borderRadius: 16, paddingVertical: 16, alignItems: 'center' }} onPress={() => onNavigate('bookAppointment', { doctor })}>
           <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.white }}>📅 Book Appointment</Text>
@@ -520,7 +548,8 @@ function DoctorProfileScreen({ doctor, onNavigate, onBack }) {
       </View>
     </View>
   );
-}// ==================== PAYMENT MODAL ====================
+}
+// ==================== PAYMENT MODAL ====================
 function PaymentModal({ visible, amount, title, onSuccess, onClose }) {
   const [selectedMethod, setSelectedMethod] = useState(null);
   const [cardNumber, setCardNumber] = useState('');
@@ -544,7 +573,7 @@ function PaymentModal({ visible, amount, title, onSuccess, onClose }) {
 
   const handlePayment = async () => {
     if (!selectedMethod) { Alert.alert('Error', 'Please select a payment method'); return; }
-    if (selectedMethod.type === 'visa' || selectedMethod.type === 'mastercard' || selectedMethod.type === 'amex') {
+    if (['visa', 'mastercard', 'amex'].includes(selectedMethod.type)) {
       if (!cardNumber || !cardName || !expiry || !cvv) { Alert.alert('Error', 'Please fill in all card details'); return; }
     }
     setProcessing(true);
@@ -578,7 +607,7 @@ function PaymentModal({ visible, amount, title, onSuccess, onClose }) {
               <Text style={{ fontSize: 13, color: COLORS.success, fontWeight: '600', flex: 1 }}>256-bit SSL encrypted. Your payment is 100% secure.</Text>
             </View>
 
-            {/* Digital Payment Methods */}
+            {/* Digital Methods */}
             <Text style={{ fontSize: 15, fontWeight: 'bold', color: COLORS.text, marginBottom: 12 }}>Quick Pay</Text>
             <View style={{ flexDirection: 'row', gap: 10, marginBottom: 24 }}>
               {digitalMethods.map((method) => (
@@ -600,7 +629,7 @@ function PaymentModal({ visible, amount, title, onSuccess, onClose }) {
               <View style={{ flex: 1, height: 1, backgroundColor: COLORS.border }} />
             </View>
 
-            {/* Card Methods */}
+            {/* Card Type Selection */}
             <Text style={{ fontSize: 15, fontWeight: 'bold', color: COLORS.text, marginBottom: 12 }}>Select Card Type</Text>
             <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
               {cardMethods.map((method) => (
@@ -639,48 +668,20 @@ function PaymentModal({ visible, amount, title, onSuccess, onClose }) {
                 {/* Card Fields */}
                 <View style={{ marginBottom: 12 }}>
                   <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.text, marginBottom: 6 }}>Card Number</Text>
-                  <TextInput
-                    style={{ backgroundColor: COLORS.white, borderRadius: 10, padding: 14, fontSize: 16, borderWidth: 1, borderColor: COLORS.border, letterSpacing: 2 }}
-                    placeholder="1234 5678 9012 3456"
-                    value={cardNumber}
-                    onChangeText={(t) => setCardNumber(formatCardNumber(t))}
-                    keyboardType="numeric"
-                    maxLength={19}
-                  />
+                  <TextInput style={{ backgroundColor: COLORS.white, borderRadius: 10, padding: 14, fontSize: 16, borderWidth: 1, borderColor: COLORS.border, letterSpacing: 2 }} placeholder="1234 5678 9012 3456" value={cardNumber} onChangeText={(t) => setCardNumber(formatCardNumber(t))} keyboardType="numeric" maxLength={19} />
                 </View>
                 <View style={{ marginBottom: 12 }}>
                   <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.text, marginBottom: 6 }}>Cardholder Name</Text>
-                  <TextInput
-                    style={{ backgroundColor: COLORS.white, borderRadius: 10, padding: 14, fontSize: 16, borderWidth: 1, borderColor: COLORS.border }}
-                    placeholder="Name on card"
-                    value={cardName}
-                    onChangeText={setCardName}
-                    autoCapitalize="characters"
-                  />
+                  <TextInput style={{ backgroundColor: COLORS.white, borderRadius: 10, padding: 14, fontSize: 16, borderWidth: 1, borderColor: COLORS.border }} placeholder="Name on card" value={cardName} onChangeText={setCardName} autoCapitalize="characters" />
                 </View>
                 <View style={{ flexDirection: 'row', gap: 12 }}>
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.text, marginBottom: 6 }}>Expiry Date</Text>
-                    <TextInput
-                      style={{ backgroundColor: COLORS.white, borderRadius: 10, padding: 14, fontSize: 16, borderWidth: 1, borderColor: COLORS.border }}
-                      placeholder="MM/YY"
-                      value={expiry}
-                      onChangeText={(t) => setExpiry(formatExpiry(t))}
-                      keyboardType="numeric"
-                      maxLength={5}
-                    />
+                    <TextInput style={{ backgroundColor: COLORS.white, borderRadius: 10, padding: 14, fontSize: 16, borderWidth: 1, borderColor: COLORS.border }} placeholder="MM/YY" value={expiry} onChangeText={(t) => setExpiry(formatExpiry(t))} keyboardType="numeric" maxLength={5} />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.text, marginBottom: 6 }}>CVV</Text>
-                    <TextInput
-                      style={{ backgroundColor: COLORS.white, borderRadius: 10, padding: 14, fontSize: 16, borderWidth: 1, borderColor: COLORS.border }}
-                      placeholder="•••"
-                      value={cvv}
-                      onChangeText={setCvv}
-                      keyboardType="numeric"
-                      maxLength={4}
-                      secureTextEntry
-                    />
+                    <TextInput style={{ backgroundColor: COLORS.white, borderRadius: 10, padding: 14, fontSize: 16, borderWidth: 1, borderColor: COLORS.border }} placeholder="•••" value={cvv} onChangeText={setCvv} keyboardType="numeric" maxLength={4} secureTextEntry />
                   </View>
                 </View>
               </View>
@@ -718,9 +719,7 @@ function PaymentModal({ visible, amount, title, onSuccess, onClose }) {
               ) : (
                 <>
                   <Text style={{ fontSize: 20 }}>🔒</Text>
-                  <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.white }}>
-                    Pay ${amount} {selectedMethod ? `via ${selectedMethod.label}` : ''}
-                  </Text>
+                  <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.white }}>Pay ${amount} {selectedMethod ? `via ${selectedMethod.label}` : ''}</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -768,7 +767,7 @@ function BookAppointmentScreen({ doctor, user, onBack, onSuccess }) {
         payment_status: 'paid',
       });
       if (error) throw error;
-      Alert.alert('Booked & Paid! 🎉', `Your appointment with ${doctor.full_name} on ${selectedDate} at ${selectedTime} is confirmed and paid!`, [{ text: 'OK', onPress: onSuccess }]);
+      Alert.alert('Booked & Paid! 🎉', `Your appointment with ${doctor.full_name} on ${selectedDate} at ${selectedTime} is confirmed!`, [{ text: 'OK', onPress: onSuccess }]);
     } catch (error) {
       Alert.alert('Error', error.message);
     } finally {
@@ -785,8 +784,8 @@ function BookAppointmentScreen({ doctor, user, onBack, onSuccess }) {
         <Text style={{ fontSize: 24, fontWeight: 'bold', color: COLORS.white }}>Book Appointment</Text>
         <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)', marginTop: 4 }}>with {doctor.full_name}</Text>
       </View>
-
       <ScrollView style={{ flex: 1, padding: 24 }}>
+        {/* Appointment Type */}
         <View style={{ backgroundColor: COLORS.white, borderRadius: 16, padding: 16, marginBottom: 16 }}>
           <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.text, marginBottom: 12 }}>Appointment Type</Text>
           <View style={{ flexDirection: 'row', gap: 12 }}>
@@ -799,6 +798,7 @@ function BookAppointmentScreen({ doctor, user, onBack, onSuccess }) {
           </View>
         </View>
 
+        {/* Select Date */}
         <View style={{ backgroundColor: COLORS.white, borderRadius: 16, padding: 16, marginBottom: 16 }}>
           <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.text, marginBottom: 12 }}>Select Date</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -810,6 +810,7 @@ function BookAppointmentScreen({ doctor, user, onBack, onSuccess }) {
           </ScrollView>
         </View>
 
+        {/* Select Time */}
         <View style={{ backgroundColor: COLORS.white, borderRadius: 16, padding: 16, marginBottom: 16 }}>
           <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.text, marginBottom: 12 }}>Select Time</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
@@ -821,11 +822,13 @@ function BookAppointmentScreen({ doctor, user, onBack, onSuccess }) {
           </View>
         </View>
 
+        {/* Notes */}
         <View style={{ backgroundColor: COLORS.white, borderRadius: 16, padding: 16, marginBottom: 16 }}>
           <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.text, marginBottom: 12 }}>Notes (Optional)</Text>
           <TextInput style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, padding: 14, fontSize: 14, height: 100, textAlignVertical: 'top', backgroundColor: COLORS.lightGray }} placeholder="Describe your symptoms or reason for visit..." value={notes} onChangeText={setNotes} multiline />
         </View>
 
+        {/* Summary */}
         <View style={{ backgroundColor: COLORS.primaryLight, borderRadius: 16, padding: 16, marginBottom: 24 }}>
           <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.text, marginBottom: 12 }}>Booking Summary</Text>
           {[
@@ -853,19 +856,13 @@ function BookAppointmentScreen({ doctor, user, onBack, onSuccess }) {
         </TouchableOpacity>
       </View>
 
-      <PaymentModal
-        visible={showPayment}
-        amount={doctor.consultation_fee}
-        title={`Appointment with ${doctor.full_name}`}
-        onSuccess={handlePaymentSuccess}
-        onClose={() => setShowPayment(false)}
-      />
+      <PaymentModal visible={showPayment} amount={doctor.consultation_fee} title={`Appointment with ${doctor.full_name}`} onSuccess={handlePaymentSuccess} onClose={() => setShowPayment(false)} />
     </View>
   );
 }
 
 // ==================== PHARMACY SCREEN ====================
-function PharmacyScreen({ user, onNavigate }) {
+function PharmacyScreen({ user }) {
   const [activeTab, setActiveTab] = useState('pharmacies');
   const [cart, setCart] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -887,183 +884,18 @@ function PharmacyScreen({ user, onNavigate }) {
     try {
       const { error } = await supabase.from('orders').insert({
         patient_id: user.id,
-        pharmacy_id: SAMPLE_PHARMACIES[0].id,
-        items: cart,
-        total_amount: cartTotal,
-        delivery_address: 'Home Address',
-        status: 'confirmed',
-        payment_status: 'paid',
-        estimated_delivery: '45-60 mins',
-      });
-      if (error) throw error;
-      Alert.alert('Order Placed & Paid! 🎉', `Your order of ${cartCount} items ($${cartTotal.toFixed(2)}) is confirmed! Estimated delivery: 45-60 mins`, [{ text: 'OK', onPress: () => { setCart([]); setShowCart(false); } }]);
-    } catch (error) {
-      Alert.alert('Error', error.message);
-    }
-  };
-
-  return (
-    <View style={{ flex: 1, backgroundColor: COLORS.background }}>
-      <View style={{ backgroundColor: COLORS.primary, paddingTop: 50, paddingBottom: 20, paddingHorizontal: 24 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <Text style={{ fontSize: 24, fontWeight: 'bold', color: COLORS.white }}>Pharmacy</Text>
-          <TouchableOpacity style={{ position: 'relative' }} onPress={() => setShowCart(true)}>
-            <Text style={{ fontSize: 28 }}>🛒</Text>
-            {cartCount > 0 && (
-              <View style={{ position: 'absolute', top: -5, right: -5, backgroundColor: COLORS.accent, borderRadius: 10, width: 20, height: 20, justifyContent: 'center', alignItems: 'center' }}>
-                <Text style={{ fontSize: 11, fontWeight: 'bold', color: COLORS.white }}>{cartCount}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
-        <View style={{ flexDirection: 'row', backgroundColor: COLORS.white, borderRadius: 12, padding: 4 }}>
-          {['pharmacies', 'medications'].map((tab) => (
-            <TouchableOpacity key={tab} style={{ flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10, backgroundColor: activeTab === tab ? COLORS.primary : 'transparent' }} onPress={() => setActiveTab(tab)}>
-              <Text style={{ fontSize: 14, fontWeight: '600', color: activeTab === tab ? COLORS.white : COLORS.gray, textTransform: 'capitalize' }}>{tab}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-
-      {activeTab === 'pharmacies' ? (
-        <ScrollView style={{ flex: 1, padding: 16 }}>
-          <View style={{ backgroundColor: COLORS.primary, borderRadius: 16, padding: 20, marginBottom: 16 }}>
-            <Text style={{ fontSize: 18, fontWeight: 'bold', color: COLORS.white, marginBottom: 8 }}>🚚 Medications, Delivered to You</Text>
-            <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)', marginBottom: 12 }}>Order prescriptions and OTC medications from trusted pharmacies</Text>
-            {[{ icon: '🚚', text: 'Door-step Delivery in under 60 mins' }, { icon: '📍', text: 'Nearby Pharmacies' }, { icon: '🕐', text: '24/7 Available' }, { icon: '✅', text: 'Verified Medications' }].map((f) => (
-              <View key={f.text} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                <Text style={{ fontSize: 16 }}>{f.icon}</Text>
-                <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.9)' }}>{f.text}</Text>
-              </View>
-            ))}
-          </View>
-          {SAMPLE_PHARMACIES.map((pharmacy) => (
-            <TouchableOpacity key={pharmacy.id} style={{ backgroundColor: COLORS.white, borderRadius: 16, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }} onPress={() => setActiveTab('medications')}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                <View style={{ width: 50, height: 50, borderRadius: 14, backgroundColor: COLORS.primaryLight, justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
-                  <Text style={{ fontSize: 26 }}>{pharmacy.icon}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.text }}>{pharmacy.name}</Text>
-                    {pharmacy.is_verified && <Text>✅</Text>}
-                  </View>
-                  <Text style={{ fontSize: 12, color: COLORS.textLight }}>📍 {pharmacy.address}</Text>
-                </View>
-              </View>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <View style={{ flexDirection: 'row', gap: 12 }}>
-                  <Text style={{ fontSize: 12, color: COLORS.warning }}>⭐ {pharmacy.rating}</Text>
-                  <Text style={{ fontSize: 12, color: pharmacy.is_open_24h ? COLORS.success : COLORS.error }}>{pharmacy.is_open_24h ? '🟢 Open 24h' : '🔴 Limited Hours'}</Text>
-                </View>
-                <TouchableOpacity style={{ backgroundColor: COLORS.primary, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 }} onPress={() => setActiveTab('medications')}>
-                  <Text style={{ fontSize: 13, fontWeight: 'bold', color: COLORS.white }}>Order</Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      ) : (
-        <View style={{ flex: 1 }}>
-          <View style={{ paddingHorizontal: 16, paddingVertical: 10 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.white, borderRadius: 12, padding: 12, gap: 10 }}>
-              <Text style={{ fontSize: 18 }}>🔍</Text>
-              <TextInput style={{ flex: 1, fontSize: 16 }} placeholder="Search medications..." value={searchQuery} onChangeText={setSearchQuery} />
-            </View>
-          </View>
-          <FlatList
-            data={filteredMeds}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={{ padding: 16 }}
-            renderItem={({ item }) => {
-              const inCart = cart.find(c => c.id === item.id);
-              return (
-                <View style={{ backgroundColor: COLORS.white, borderRadius: 16, padding: 16, marginBottom: 12, flexDirection: 'row', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }}>
-                  <View style={{ width: 50, height: 50, borderRadius: 14, backgroundColor: COLORS.primaryLight, justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
-                    <Text style={{ fontSize: 26 }}>{item.icon}</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 15, fontWeight: 'bold', color: COLORS.text }}>{item.name}</Text>
-                    <Text style={{ fontSize: 12, color: COLORS.textLight, marginBottom: 4 }}>{item.category} • {item.description}</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Text style={{ fontSize: 15, fontWeight: 'bold', color: COLORS.primary }}>${item.price}</Text>
-                      {item.requires_prescription && <View style={{ backgroundColor: '#FEF3C7', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 }}><Text style={{ fontSize: 11, color: '#D97706' }}>Rx Required</Text></View>}
-                    </View>
-                  </View>
-                  <TouchableOpacity style={{ backgroundColor: inCart ? COLORS.success : COLORS.primary, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 }} onPress={() => addToCart(item)}>
-                    <Text style={{ fontSize: 13, fontWeight: 'bold', color: COLORS.white }}>{inCart ? `✓ ${inCart.quantity}` : 'Add'}</Text>
-                  </TouchableOpacity>
-                </View>
-              );
-            }}
-          />
-        </View>
-      )}
-
-      {/* Cart Modal */}
-      <Modal visible={showCart} animationType="slide" transparent>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-          <View style={{ backgroundColor: COLORS.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: height * 0.7 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <Text style={{ fontSize: 20, fontWeight: 'bold', color: COLORS.text }}>🛒 Your Cart ({cartCount})</Text>
-              <TouchableOpacity onPress={() => setShowCart(false)}><Text style={{ fontSize: 24 }}>✕</Text></TouchableOpacity>
-            </View>
-            {cart.length === 0 ? (
-              <View style={{ alignItems: 'center', padding: 40 }}>
-                <Text style={{ fontSize: 40, marginBottom: 16 }}>🛒</Text>
-                <Text style={{ fontSize: 16, color: COLORS.textLight }}>Your cart is empty</Text>
-              </View>
-            ) : (
-              <>
-                <ScrollView style={{ maxHeight: 280 }}>
-                  {cart.map((item) => (
-                    <View key={item.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text }}>{item.name}</Text>
-                        <Text style={{ fontSize: 13, color: COLORS.textLight }}>Qty: {item.quantity} × ${item.price}</Text>
-                      </View>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                        <Text style={{ fontSize: 14, fontWeight: 'bold', color: COLORS.primary }}>${(item.price * item.quantity).toFixed(2)}</Text>
-                        <TouchableOpacity onPress={() => removeFromCart(item.id)}><Text style={{ fontSize: 18 }}>🗑️</Text></TouchableOpacity>
-                      </View>
-                    </View>
-                  ))}
-                </ScrollView>
-                <View style={{ borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 16, marginTop: 16 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 }}>
-                    <Text style={{ fontSize: 18, fontWeight: 'bold', color: COLORS.text }}>Total</Text>
-                    <Text style={{ fontSize: 18, fontWeight: 'bold', color: COLORS.primary }}>${cartTotal.toFixed(2)}</Text>
-                  </View>
-                  <TouchableOpacity style={{ backgroundColor: COLORS.primary, borderRadius: 16, paddingVertical: 16, alignItems: 'center' }} onPress={() => { setShowCart(false); setShowPayment(true); }}>
-                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.white }}>💳 Proceed to Payment</Text>
-                  </TouchableOpacity>
-                </View>
-              </>
-            )}
-          </View>
-        </View>
-      </Modal>
-
-      <PaymentModal
-        visible={showPayment}
-        amount={cartTotal.toFixed(2)}
-        title={`Medication Order (${cartCount} items)`}
-        onSuccess={handlePaymentSuccess}
-        onClose={() => setShowPayment(false)}
-      />
-    </View>
-  );
-}
-
-// ==================== ORDER TRACKING SCREEN ====================
-function OrderTrackingScreen({ user }) {
+        pharmacy_id:​​​​​​​​​​​​​​​​
+// ==================== ACTIVITY SCREEN ====================
+function ActivityScreen({ user }) {
+  const [activeTab, setActiveTab] = useState('appointments');
+  const [appointments, setAppointments] = useState([]);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    fetchOrders();
+    fetchAll();
     Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, { toValue: 1.2, duration: 800, useNativeDriver: true }),
@@ -1072,19 +904,39 @@ function OrderTrackingScreen({ user }) {
     ).start();
   }, []);
 
-  const fetchOrders = async () => {
+  const fetchAll = async () => {
     try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('patient_id', user.id)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      setOrders(data || []);
+      const [apptRes, orderRes] = await Promise.all([
+        supabase.from('appointments').select('*').eq('patient_id', user.id).order('appointment_date', { ascending: false }),
+        supabase.from('orders').select('*').eq('patient_id', user.id).order('created_at', { ascending: false }),
+      ]);
+      setAppointments(apptRes.data || []);
+      setOrders(orderRes.data || []);
     } catch (error) {
       console.log(error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const getApptStatusColor = (status) => {
+    switch (status) {
+      case 'confirmed': return COLORS.success;
+      case 'pending': return COLORS.warning;
+      case 'cancelled': return COLORS.error;
+      case 'completed': return COLORS.gray;
+      default: return COLORS.gray;
+    }
+  };
+
+  const getOrderStatusColor = (status) => {
+    switch (status) {
+      case 'delivered': return COLORS.success;
+      case 'out_for_delivery': return COLORS.primary;
+      case 'preparing': return COLORS.warning;
+      case 'confirmed': return COLORS.primary;
+      case 'cancelled': return COLORS.error;
+      default: return COLORS.gray;
     }
   };
 
@@ -1098,43 +950,32 @@ function OrderTrackingScreen({ user }) {
 
   const getStepIndex = (status) => TRACKING_STEPS.findIndex(s => s.id === status);
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'delivered': return COLORS.success;
-      case 'out_for_delivery': return COLORS.primary;
-      case 'preparing': return COLORS.warning;
-      case 'confirmed': return COLORS.primary;
-      case 'cancelled': return COLORS.error;
-      default: return COLORS.gray;
-    }
-  };
-
+  // Order Detail View
   if (selectedOrder) {
     const currentStep = getStepIndex(selectedOrder.status);
     return (
       <View style={{ flex: 1, backgroundColor: COLORS.background }}>
         <View style={{ backgroundColor: COLORS.primary, paddingTop: 50, paddingBottom: 20, paddingHorizontal: 24 }}>
           <TouchableOpacity onPress={() => setSelectedOrder(null)} style={{ marginBottom: 16 }}>
-            <Text style={{ fontSize: 16, color: COLORS.white }}>← Back to Orders</Text>
+            <Text style={{ fontSize: 16, color: COLORS.white }}>← Back to Activity</Text>
           </TouchableOpacity>
           <Text style={{ fontSize: 24, fontWeight: 'bold', color: COLORS.white }}>Track Order</Text>
           <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)', marginTop: 4 }}>
             Order #{selectedOrder.id.slice(0, 8).toUpperCase()}
           </Text>
         </View>
-
         <ScrollView style={{ flex: 1, padding: 24 }}>
           {/* Status Banner */}
-          <View style={{ backgroundColor: getStatusColor(selectedOrder.status) + '15', borderRadius: 16, padding: 20, marginBottom: 24, alignItems: 'center', borderWidth: 1, borderColor: getStatusColor(selectedOrder.status) + '30' }}>
+          <View style={{ backgroundColor: getOrderStatusColor(selectedOrder.status) + '15', borderRadius: 16, padding: 20, marginBottom: 24, alignItems: 'center', borderWidth: 1, borderColor: getOrderStatusColor(selectedOrder.status) + '30' }}>
             <Animated.Text style={{ fontSize: 50, marginBottom: 8, transform: [{ scale: selectedOrder.status === 'out_for_delivery' ? pulseAnim : 1 }] }}>
               {TRACKING_STEPS.find(s => s.id === selectedOrder.status)?.icon || '📋'}
             </Animated.Text>
-            <Text style={{ fontSize: 20, fontWeight: 'bold', color: getStatusColor(selectedOrder.status), textTransform: 'capitalize' }}>
+            <Text style={{ fontSize: 20, fontWeight: 'bold', color: getOrderStatusColor(selectedOrder.status), textTransform: 'capitalize' }}>
               {selectedOrder.status.replace(/_/g, ' ')}
             </Text>
             {selectedOrder.estimated_delivery && (
               <Text style={{ fontSize: 13, color: COLORS.textLight, marginTop: 4 }}>
-                Estimated delivery: {selectedOrder.estimated_delivery}
+                Estimated: {selectedOrder.estimated_delivery}
               </Text>
             )}
           </View>
@@ -1200,7 +1041,7 @@ function OrderTrackingScreen({ user }) {
               <Text style={{ fontSize: 14, color: COLORS.textLight }}>Payment Status</Text>
               <View style={{ backgroundColor: selectedOrder.payment_status === 'paid' ? COLORS.success + '20' : COLORS.warning + '20', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 4 }}>
                 <Text style={{ fontSize: 13, fontWeight: '600', color: selectedOrder.payment_status === 'paid' ? COLORS.success : COLORS.warning, textTransform: 'capitalize' }}>
-                  {selectedOrder.payment_status}
+                  {selectedOrder.payment_status === 'paid' ? '✅ Paid' : '⏳ ' + selectedOrder.payment_status}
                 </Text>
               </View>
             </View>
@@ -1213,159 +1054,120 @@ function OrderTrackingScreen({ user }) {
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
       <View style={{ backgroundColor: COLORS.primary, paddingTop: 50, paddingBottom: 20, paddingHorizontal: 24 }}>
-        <Text style={{ fontSize: 24, fontWeight: 'bold', color: COLORS.white }}>My Orders</Text>
-        <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)', marginTop: 4 }}>Track your medication deliveries</Text>
-      </View>
-      {loading ? (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-        </View>
-      ) : orders.length === 0 ? (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
-          <Text style={{ fontSize: 60, marginBottom: 16 }}>📦</Text>
-          <Text style={{ fontSize: 18, fontWeight: 'bold', color: COLORS.text, marginBottom: 8 }}>No orders yet</Text>
-          <Text style={{ fontSize: 14, color: COLORS.textLight, textAlign: 'center' }}>Order medications from the Pharmacy tab to get started</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={orders}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={{ padding: 16 }}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={{ backgroundColor: COLORS.white, borderRadius: 16, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }}
-              onPress={() => setSelectedOrder(item)}
-            >
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                <View>
-                  <Text style={{ fontSize: 15, fontWeight: 'bold', color: COLORS.text }}>
-                    Order #{item.id.slice(0, 8).toUpperCase()}
-                  </Text>
-                  <Text style={{ fontSize: 12, color: COLORS.textLight, marginTop: 2 }}>
-                    {new Date(item.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                  </Text>
-                </View>
-                <View style={{ backgroundColor: getStatusColor(item.status) + '20', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
-                  <Text style={{ fontSize: 12, fontWeight: '600', color: getStatusColor(item.status), textTransform: 'capitalize' }}>
-                    {item.status?.replace(/_/g, ' ')}
-                  </Text>
-                </View>
-              </View>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={{ fontSize: 13, color: COLORS.textLight }}>
-                  🛒 {(item.items || []).length} item{(item.items || []).length !== 1 ? 's' : ''}
-                </Text>
-                <Text style={{ fontSize: 15, fontWeight: 'bold', color: COLORS.primary }}>
-                  ${item.total_amount?.toFixed(2)}
-                </Text>
-              </View>
-              <View style={{ marginTop: 10 }}>
-                <Text style={{ fontSize: 13, color: COLORS.primary, fontWeight: '600' }}>Track Order →</Text>
-              </View>
-            </TouchableOpacity>
-          )}
-        />
-      )}
-    </View>
-  );
-}
-
-// ==================== APPOINTMENTS SCREEN ====================
-function AppointmentsScreen({ user }) {
-  const [appointments, setAppointments] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('upcoming');
-
-  useEffect(() => { fetchAppointments(); }, []);
-
-  const fetchAppointments = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('appointments')
-        .select('*')
-        .eq('patient_id', user.id)
-        .order('appointment_date', { ascending: false });
-      if (error) throw error;
-      setAppointments(data || []);
-    } catch (error) {
-      console.log(error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const upcoming = appointments.filter(a => ['pending', 'confirmed'].includes(a.status));
-  const past = appointments.filter(a => ['completed', 'cancelled'].includes(a.status));
-  const displayed = activeTab === 'upcoming' ? upcoming : past;
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'confirmed': return COLORS.success;
-      case 'pending': return COLORS.warning;
-      case 'cancelled': return COLORS.error;
-      case 'completed': return COLORS.gray;
-      default: return COLORS.gray;
-    }
-  };
-
-  return (
-    <View style={{ flex: 1, backgroundColor: COLORS.background }}>
-      <View style={{ backgroundColor: COLORS.primary, paddingTop: 50, paddingBottom: 20, paddingHorizontal: 24 }}>
-        <Text style={{ fontSize: 24, fontWeight: 'bold', color: COLORS.white, marginBottom: 16 }}>My Appointments</Text>
+        <Text style={{ fontSize: 24, fontWeight: 'bold', color: COLORS.white, marginBottom: 16 }}>My Activity</Text>
         <View style={{ flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 12, padding: 4 }}>
-          {['upcoming', 'past'].map((tab) => (
-            <TouchableOpacity key={tab} style={{ flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10, backgroundColor: activeTab === tab ? COLORS.white : 'transparent' }} onPress={() => setActiveTab(tab)}>
-              <Text style={{ fontSize: 14, fontWeight: '600', color: activeTab === tab ? COLORS.primary : COLORS.white, textTransform: 'capitalize' }}>{tab}</Text>
+          {[
+            { id: 'appointments', label: '📅 Bookings' },
+            { id: 'orders', label: '📦 Orders' },
+          ].map((tab) => (
+            <TouchableOpacity
+              key={tab.id}
+              style={{ flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10, backgroundColor: activeTab === tab.id ? COLORS.white : 'transparent' }}
+              onPress={() => setActiveTab(tab.id)}
+            >
+              <Text style={{ fontSize: 14, fontWeight: '600', color: activeTab === tab.id ? COLORS.primary : COLORS.white }}>
+                {tab.label}
+              </Text>
             </TouchableOpacity>
           ))}
         </View>
       </View>
+
       {loading ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <ActivityIndicator size="large" color={COLORS.primary} />
         </View>
-      ) : displayed.length === 0 ? (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
-          <Text style={{ fontSize: 50, marginBottom: 16 }}>📅</Text>
-          <Text style={{ fontSize: 18, fontWeight: 'bold', color: COLORS.text, marginBottom: 8 }}>No {activeTab} appointments</Text>
-          <Text style={{ fontSize: 14, color: COLORS.textLight, textAlign: 'center' }}>Book an appointment with a doctor to get started</Text>
-        </View>
+      ) : activeTab === 'appointments' ? (
+        appointments.length === 0 ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
+            <Text style={{ fontSize: 50, marginBottom: 16 }}>📅</Text>
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: COLORS.text, marginBottom: 8 }}>No appointments yet</Text>
+            <Text style={{ fontSize: 14, color: COLORS.textLight, textAlign: 'center' }}>Book an appointment with a doctor to get started</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={appointments}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={{ padding: 16 }}
+            renderItem={({ item }) => (
+              <View style={{ backgroundColor: COLORS.white, borderRadius: 16, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.text, marginBottom: 4 }}>
+                      {SAMPLE_DOCTORS.find(d => d.id === item.doctor_id)?.full_name || 'Doctor'}
+                    </Text>
+                    <Text style={{ fontSize: 13, color: COLORS.primary }}>
+                      {SAMPLE_DOCTORS.find(d => d.id === item.doctor_id)?.specialty || ''}
+                    </Text>
+                  </View>
+                  <View style={{ backgroundColor: getApptStatusColor(item.status) + '20', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: getApptStatusColor(item.status), textTransform: 'capitalize' }}>{item.status}</Text>
+                  </View>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 16, flexWrap: 'wrap' }}>
+                  <Text style={{ fontSize: 13, color: COLORS.textLight }}>📅 {item.appointment_date}</Text>
+                  <Text style={{ fontSize: 13, color: COLORS.textLight }}>🕐 {item.appointment_time}</Text>
+                  <Text style={{ fontSize: 13, color: COLORS.textLight }}>{item.type === 'video' ? '📹' : '🏥'} {item.type}</Text>
+                </View>
+                {item.fee && (
+                  <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.border, flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Text style={{ fontSize: 13, color: COLORS.textLight }}>Fee: ${item.fee}</Text>
+                    <Text style={{ fontSize: 13, color: item.payment_status === 'paid' ? COLORS.success : COLORS.warning, fontWeight: '600' }}>
+                      {item.payment_status === 'paid' ? '✅ Paid' : '⏳ Unpaid'}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+          />
+        )
       ) : (
-        <FlatList
-          data={displayed}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={{ padding: 16 }}
-          renderItem={({ item }) => (
-            <View style={{ backgroundColor: COLORS.white, borderRadius: 16, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.text, marginBottom: 4 }}>
-                    {SAMPLE_DOCTORS.find(d => d.id === item.doctor_id)?.full_name || 'Doctor'}
+        orders.length === 0 ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
+            <Text style={{ fontSize: 60, marginBottom: 16 }}>📦</Text>
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: COLORS.text, marginBottom: 8 }}>No orders yet</Text>
+            <Text style={{ fontSize: 14, color: COLORS.textLight, textAlign: 'center' }}>Order medications from the Pharmacy tab to get started</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={orders}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={{ padding: 16 }}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={{ backgroundColor: COLORS.white, borderRadius: 16, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }}
+                onPress={() => setSelectedOrder(item)}
+              >
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                  <View>
+                    <Text style={{ fontSize: 15, fontWeight: 'bold', color: COLORS.text }}>
+                      Order #{item.id.slice(0, 8).toUpperCase()}
+                    </Text>
+                    <Text style={{ fontSize: 12, color: COLORS.textLight, marginTop: 2 }}>
+                      {new Date(item.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </Text>
+                  </View>
+                  <View style={{ backgroundColor: getOrderStatusColor(item.status) + '20', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: getOrderStatusColor(item.status), textTransform: 'capitalize' }}>
+                      {item.status?.replace(/_/g, ' ')}
+                    </Text>
+                  </View>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={{ fontSize: 13, color: COLORS.textLight }}>
+                    🛒 {(item.items || []).length} item{(item.items || []).length !== 1 ? 's' : ''}
                   </Text>
-                  <Text style={{ fontSize: 13, color: COLORS.primary }}>
-                    {SAMPLE_DOCTORS.find(d => d.id === item.doctor_id)?.specialty || ''}
+                  <Text style={{ fontSize: 15, fontWeight: 'bold', color: COLORS.primary }}>
+                    ${item.total_amount?.toFixed(2)}
                   </Text>
                 </View>
-                <View style={{ backgroundColor: getStatusColor(item.status) + '20', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
-                  <Text style={{ fontSize: 12, fontWeight: '600', color: getStatusColor(item.status), textTransform: 'capitalize' }}>{item.status}</Text>
+                <View style={{ marginTop: 10 }}>
+                  <Text style={{ fontSize: 13, color: COLORS.primary, fontWeight: '600' }}>Track Order →</Text>
                 </View>
-              </View>
-              <View style={{ flexDirection: 'row', gap: 16, flexWrap: 'wrap' }}>
-                <Text style={{ fontSize: 13, color: COLORS.textLight }}>📅 {item.appointment_date}</Text>
-                <Text style={{ fontSize: 13, color: COLORS.textLight }}>🕐 {item.appointment_time}</Text>
-                <Text style={{ fontSize: 13, color: COLORS.textLight }}>{item.type === 'video' ? '📹' : '🏥'} {item.type}</Text>
-              </View>
-              {item.fee && (
-                <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.border, flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Text style={{ fontSize: 13, color: COLORS.textLight }}>Fee: ${item.fee}</Text>
-                  <Text style={{ fontSize: 13, color: item.payment_status === 'paid' ? COLORS.success : COLORS.warning, fontWeight: '600', textTransform: 'capitalize' }}>
-                    {item.payment_status === 'paid' ? '✅ Paid' : '⏳ ' + item.payment_status}
-                  </Text>
-                </View>
-              )}
-            </View>
-          )}
-        />
+              </TouchableOpacity>
+            )}
+          />
+        )
       )}
     </View>
   );
@@ -1387,7 +1189,7 @@ function ProfileScreen({ user, onLogout }) {
   const menuItems = [
     { icon: '👤', label: 'Personal Information', action: () => {} },
     { icon: '📅', label: 'My Appointments', action: () => {} },
-    { icon: '💊', label: 'My Orders', action: () => {} },
+    { icon: '📦', label: 'My Orders', action: () => {} },
     { icon: '💳', label: 'Payment Methods', action: () => {} },
     { icon: '🔔', label: 'Notifications', action: () => {} },
     { icon: '🔒', label: 'Privacy & Security', action: () => {} },
@@ -1413,7 +1215,7 @@ function ProfileScreen({ user, onLogout }) {
       </View>
 
       <View style={{ padding: 24 }}>
-        {/* Stats Row */}
+        {/* Stats */}
         <View style={{ flexDirection: 'row', gap: 12, marginBottom: 24 }}>
           {[
             { icon: '📅', label: 'Appointments', value: '0' },
@@ -1428,6 +1230,7 @@ function ProfileScreen({ user, onLogout }) {
           ))}
         </View>
 
+        {/* Menu */}
         <View style={{ backgroundColor: COLORS.white, borderRadius: 16, overflow: 'hidden', marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }}>
           {menuItems.map((item, index) => (
             <TouchableOpacity key={item.label} style={{ flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: index < menuItems.length - 1 ? 1 : 0, borderBottomColor: COLORS.border }} onPress={item.action}>
@@ -1438,6 +1241,7 @@ function ProfileScreen({ user, onLogout }) {
           ))}
         </View>
 
+        {/* Logout */}
         <TouchableOpacity style={{ backgroundColor: COLORS.error + '15', borderRadius: 16, paddingVertical: 16, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 16 }} onPress={onLogout}>
           <Text style={{ fontSize: 20 }}>🚪</Text>
           <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.error }}>Log Out</Text>
@@ -1450,7 +1254,7 @@ function ProfileScreen({ user, onLogout }) {
     </ScrollView>
   );
 }
-// ==================== MAIN APP WITH NAVIGATION ====================
+// ==================== MAIN APP ====================
 function MainApp({ user, onLogout }) {
   const [activeTab, setActiveTab] = useState('home');
   const [screen, setScreen] = useState('home');
@@ -1461,25 +1265,23 @@ function MainApp({ user, onLogout }) {
     setScreenParams(params);
   };
 
-  const goBack = () => {
-    setScreen(activeTab);
-    setScreenParams({});
-  };
-
   const switchTab = (tabName) => {
     setActiveTab(tabName);
     setScreen(tabName);
     setScreenParams({});
   };
 
-  // Full screen overlays (no tab bar)
+  // Full screen overlays — no tab bar shown
   if (screen === 'doctorProfile') {
     return (
       <DoctorProfileScreen
         doctor={screenParams.doctor}
         user={user}
         onNavigate={navigate}
-        onBack={goBack}
+        onBack={() => {
+          setScreen(activeTab);
+          setScreenParams({});
+        }}
       />
     );
   }
@@ -1489,8 +1291,11 @@ function MainApp({ user, onLogout }) {
       <BookAppointmentScreen
         doctor={screenParams.doctor}
         user={user}
-        onBack={goBack}
-        onSuccess={() => switchTab('appointments')}
+        onBack={() => {
+          setScreen('doctorProfile');
+          setScreenParams({ doctor: screenParams.doctor });
+        }}
+        onSuccess={() => switchTab('activity')}
       />
     );
   }
@@ -1498,8 +1303,7 @@ function MainApp({ user, onLogout }) {
   const tabs = [
     { id: 'home', icon: '🏠', label: 'Home' },
     { id: 'search', icon: '🔍', label: 'Search' },
-    { id: 'appointments', icon: '📅', label: 'Bookings' },
-    { id: 'orders', icon: '📦', label: 'Orders' },
+    { id: 'activity', icon: '📋', label: 'Activity' },
     { id: 'pharmacy', icon: '💊', label: 'Pharmacy' },
     { id: 'profile', icon: '👤', label: 'Profile' },
   ];
@@ -1512,7 +1316,7 @@ function MainApp({ user, onLogout }) {
           <HomeScreen
             user={user}
             onNavigate={(s, p) => {
-              if (['search', 'pharmacy', 'appointments', 'orders', 'profile'].includes(s)) {
+              if (['search', 'pharmacy', 'activity', 'profile'].includes(s)) {
                 switchTab(s);
               } else {
                 navigate(s, p);
@@ -1522,18 +1326,17 @@ function MainApp({ user, onLogout }) {
         )}
         {activeTab === 'search' && (
           <SearchScreen
-            onNavigate={navigate}
+            onNavigate={(s, p) => {
+              if (s === 'doctorProfile') navigate(s, p);
+            }}
             initialSpecialty={screenParams.specialty}
           />
         )}
-        {activeTab === 'appointments' && (
-          <AppointmentsScreen user={user} />
-        )}
-        {activeTab === 'orders' && (
-          <OrderTrackingScreen user={user} />
+        {activeTab === 'activity' && (
+          <ActivityScreen user={user} />
         )}
         {activeTab === 'pharmacy' && (
-          <PharmacyScreen user={user} onNavigate={navigate} />
+          <PharmacyScreen user={user} />
         )}
         {activeTab === 'profile' && (
           <ProfileScreen user={user} onLogout={onLogout} />
@@ -1567,7 +1370,12 @@ function MainApp({ user, onLogout }) {
               borderRadius: 2,
               marginBottom: 6,
             }} />
-            <Text style={{ fontSize: activeTab === tab.id ? 24 : 22, marginBottom: 2 }}>{tab.icon}</Text>
+            <Text style={{
+              fontSize: activeTab === tab.id ? 24 : 22,
+              marginBottom: 2,
+            }}>
+              {tab.icon}
+            </Text>
             <Text style={{
               fontSize: 10,
               fontWeight: activeTab === tab.id ? '700' : '500',
