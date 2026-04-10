@@ -4890,3 +4890,1750 @@ function PharmacyProfileEditor({ user, pharmacyProfile, onBack, onSaved }) {
     </View>
   );
 }
+// ============================================
+// PART 5 — ADMIN DASHBOARD
+// ============================================
+
+function AdminShell({ profile, onLogout }) {
+  const { user, setShowNotifications, setAdminViewAs } = useApp();
+  const [activeTab, setActiveTab] = useState('home');
+  const [screen, setScreen] = useState('home');
+  const [screenParams, setScreenParams] = useState({});
+  const [toast, setToast] = useState(null);
+
+  useEffect(() => {
+    if (!user) return;
+    const sub = supabase
+      .channel(`admin_notif_${user.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'notifications',
+        filter: `user_id=eq.${user.id}`,
+      }, (payload) => {
+        setToast({
+          title: payload.new.title,
+          body: payload.new.body,
+          icon: payload.new.data?.icon || '🔔',
+        });
+      })
+      .subscribe();
+    return () => supabase.removeChannel(sub);
+  }, [user]);
+
+  const navigate = (screenName, params = {}) => {
+    setScreen(screenName);
+    setScreenParams(params);
+  };
+
+  const switchTab = (tabName) => {
+    setActiveTab(tabName);
+    setScreen(tabName);
+    setScreenParams({});
+  };
+
+  const subScreens = {
+    verifications: <AdminVerifications onBack={() => switchTab('home')} />,
+    refunds: <AdminRefunds onBack={() => switchTab('home')} />,
+    revenue: <AdminRevenue onBack={() => switchTab('home')} />,
+    commissions: <AdminCommissions onBack={() => switchTab('home')} />,
+    sendNotification: <AdminSendNotification onBack={() => switchTab('home')} />,
+    appointments: <AdminAppointments onBack={() => switchTab('home')} />,
+    orders: <AdminOrders onBack={() => switchTab('home')} />,
+    users: <AdminUsers onBack={() => switchTab('home')} />,
+    doctors: <AdminUsers onBack={() => switchTab('home')} initialFilter="doctor" />,
+    pharmacies: <AdminUsers onBack={() => switchTab('home')} initialFilter="pharmacy" />,
+    patients: <AdminUsers onBack={() => switchTab('home')} initialFilter="patient" />,
+  };
+
+  if (subScreens[screen]) return (
+    <View style={{ flex: 1 }}>
+      {subScreens[screen]}
+      <ToastNotification message={toast} visible={!!toast} onHide={() => setToast(null)} />
+    </View>
+  );
+
+  const tabs = [
+    { id: 'home', icon: '🛡️', label: 'Dashboard' },
+    { id: 'users', icon: '👥', label: 'Users' },
+    { id: 'verifications', icon: '✅', label: 'Verify' },
+    { id: 'revenue', icon: '💰', label: 'Revenue' },
+    { id: 'settings', icon: '⚙️', label: 'Settings' },
+  ];
+
+  return (
+    <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+      <View style={{ flex: 1 }}>
+        {activeTab === 'home' && (
+          <AdminHome
+            user={user}
+            profile={profile}
+            onNavigate={(s, p = {}) => navigate(s, p)}
+          />
+        )}
+        {activeTab === 'users' && (
+          <AdminUsers onBack={() => switchTab('home')} />
+        )}
+        {activeTab === 'verifications' && (
+          <AdminVerifications onBack={() => switchTab('home')} />
+        )}
+        {activeTab === 'revenue' && (
+          <AdminRevenue onBack={() => switchTab('home')} />
+        )}
+        {activeTab === 'settings' && (
+          <AdminSettings
+            user={user}
+            profile={profile}
+            onLogout={onLogout}
+            onNavigate={navigate}
+          />
+        )}
+      </View>
+
+      <ToastNotification message={toast} visible={!!toast} onHide={() => setToast(null)} />
+
+      <View style={{ flexDirection: 'row', backgroundColor: COLORS.white, borderTopWidth: 1, borderTopColor: COLORS.border, paddingBottom: Platform.OS === 'ios' ? 24 : 10, paddingTop: 10, shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.06, shadowRadius: 12, elevation: 10 }}>
+        {tabs.map((tab) => (
+          <TouchableOpacity key={tab.id} style={{ flex: 1, alignItems: 'center' }} onPress={() => switchTab(tab.id)}>
+            <View style={{ width: activeTab === tab.id ? 36 : 0, height: 3, backgroundColor: COLORS.adminColor, borderRadius: 2, marginBottom: 4 }} />
+            <Text style={{ fontSize: activeTab === tab.id ? 22 : 20, marginBottom: 2 }}>{tab.icon}</Text>
+            <Text style={{ fontSize: 10, fontWeight: activeTab === tab.id ? '700' : '500', color: activeTab === tab.id ? COLORS.adminColor : COLORS.gray }}>{tab.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function AdminHome({ user, profile, onNavigate }) {
+  const { setShowNotifications, setAdminViewAs } = useApp();
+  const [stats, setStats] = useState({
+    totalUsers: 0, totalDoctors: 0, totalPharmacies: 0,
+    pendingVerifications: 0, totalRevenue: 0, totalCommissions: 0,
+    activeAppointments: 0, activeOrders: 0, pendingRefunds: 0,
+  });
+  const [recentNotifications, setRecentNotifications] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => { fetchDashboard(); }, []);
+
+  const fetchDashboard = async () => {
+    try {
+      const [profilesRes, doctorsRes, pharmaciesRes, apptsRes, ordersRes, commissionsRes, notifsRes] = await Promise.all([
+        supabase.from('profiles').select('*', { count: 'exact', head: true }),
+        supabase.from('doctor_profiles').select('*'),
+        supabase.from('pharmacy_profiles').select('*'),
+        supabase.from('appointments').select('*'),
+        supabase.from('orders').select('*'),
+        supabase.from('commissions').select('*'),
+        supabase.from('notifications').select('*').eq('user_id', user.id).eq('is_read', false).order('created_at', { ascending: false }).limit(5),
+      ]);
+
+      const doctors = doctorsRes.data || [];
+      const pharmacies = pharmaciesRes.data || [];
+      const appts = apptsRes.data || [];
+      const ords = ordersRes.data || [];
+      const comms = commissionsRes.data || [];
+
+      setStats({
+        totalUsers: profilesRes.count || 0,
+        totalDoctors: doctors.length,
+        totalPharmacies: pharmacies.length,
+        pendingVerifications:
+          doctors.filter(d => d.verification_status === 'pending').length +
+          pharmacies.filter(p => p.verification_status === 'pending').length,
+        totalRevenue:
+          appts.reduce((s, a) => s + (a.fee || 0), 0) +
+          ords.reduce((s, o) => s + (o.total_amount || 0), 0),
+        totalCommissions: comms.reduce((s, c) => s + (c.amount || 0), 0),
+        activeAppointments: appts.filter(a => ['pending', 'confirmed', 'in-progress'].includes(a.status)).length,
+        activeOrders: ords.filter(o => ['pending', 'confirmed', 'preparing', 'out_for_delivery'].includes(o.status)).length,
+        pendingRefunds:
+          appts.filter(a => a.payment_status === 'refunded').length +
+          ords.filter(o => o.payment_status === 'refunded').length,
+      });
+
+      setRecentNotifications(notifsRes.data || []);
+    } catch (error) {
+      console.log(error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  return (
+    <ScrollView
+      style={{ flex: 1, backgroundColor: COLORS.background }}
+      showsVerticalScrollIndicator={false}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchDashboard(); }} />}
+    >
+      <View style={{ backgroundColor: COLORS.adminColor, paddingTop: Platform.OS === 'ios' ? 50 : 40, paddingBottom: 30, paddingHorizontal: 20, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+          <View>
+            <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)' }}>Admin Control Panel 🛡️</Text>
+            <Text style={{ fontSize: 22, fontWeight: 'bold', color: COLORS.white }}>{profile.full_name}</Text>
+            <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)' }}>MediConnect Founder</Text>
+          </View>
+          <NotificationBell userId={user?.id} onPress={() => setShowNotifications(true)} />
+        </View>
+
+        {stats.pendingVerifications > 0 && (
+          <TouchableOpacity
+            style={{ backgroundColor: COLORS.warning, borderRadius: 14, padding: 14, marginTop: 14, flexDirection: 'row', alignItems: 'center', gap: 10 }}
+            onPress={() => onNavigate('verifications')}
+          >
+            <Text style={{ fontSize: 22 }}>⚠️</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 14, fontWeight: 'bold', color: COLORS.white }}>
+                {stats.pendingVerifications} Pending Verification{stats.pendingVerifications > 1 ? 's' : ''}
+              </Text>
+              <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.9)' }}>Tap to review and approve</Text>
+            </View>
+            <Text style={{ fontSize: 18, color: COLORS.white }}>›</Text>
+          </TouchableOpacity>
+        )}
+
+        {stats.pendingRefunds > 0 && (
+          <TouchableOpacity
+            style={{ backgroundColor: COLORS.error, borderRadius: 14, padding: 14, marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 10 }}
+            onPress={() => onNavigate('refunds')}
+          >
+            <Text style={{ fontSize: 22 }}>↩️</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 14, fontWeight: 'bold', color: COLORS.white }}>
+                {stats.pendingRefunds} Refund{stats.pendingRefunds > 1 ? 's' : ''} to Process
+              </Text>
+              <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.9)' }}>Tap to process patient refunds</Text>
+            </View>
+            <Text style={{ fontSize: 18, color: COLORS.white }}>›</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <View style={{ padding: 20 }}>
+        <View style={{ backgroundColor: COLORS.adminColor, borderRadius: 20, padding: 24, marginBottom: 20 }}>
+          <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)', marginBottom: 4 }}>Platform Revenue</Text>
+          <Text style={{ fontSize: 40, fontWeight: 'bold', color: COLORS.white, marginBottom: 4 }}>
+            ${stats.totalRevenue.toFixed(2)}
+          </Text>
+          <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)' }}>
+            My Commission: <Text style={{ fontWeight: 'bold', color: COLORS.white }}>${stats.totalCommissions.toFixed(2)}</Text>
+          </Text>
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
+            <TouchableOpacity
+              style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 10, paddingVertical: 10, alignItems: 'center' }}
+              onPress={() => onNavigate('revenue')}
+            >
+              <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.white }}>Revenue →</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={{ flex: 1, backgroundColor: COLORS.white, borderRadius: 10, paddingVertical: 10, alignItems: 'center' }}
+              onPress={() => onNavigate('commissions')}
+            >
+              <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.adminColor }}>Commissions →</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
+          {[
+            { icon: '👥', label: 'Total Users', value: stats.totalUsers, color: '#F5F3FF', textColor: COLORS.adminColor, screen: 'users' },
+            { icon: '👨‍⚕️', label: 'Doctors', value: stats.totalDoctors, color: '#EFF6FF', textColor: COLORS.doctorColor, screen: 'doctors' },
+            { icon: '🏪', label: 'Pharmacies', value: stats.totalPharmacies, color: '#F0FDF4', textColor: COLORS.pharmacyColor, screen: 'pharmacies' },
+            { icon: '📅', label: 'Active Appts', value: stats.activeAppointments, color: '#EFF6FF', textColor: COLORS.doctorColor, screen: 'appointments' },
+            { icon: '📦', label: 'Active Orders', value: stats.activeOrders, color: '#F0FDF4', textColor: COLORS.pharmacyColor, screen: 'orders' },
+            { icon: '↩️', label: 'Pending Refunds', value: stats.pendingRefunds, color: '#FEE2E2', textColor: COLORS.error, screen: 'refunds' },
+          ].map((stat) => (
+            <TouchableOpacity
+              key={stat.label}
+              style={{ width: (width - 52) / 2, backgroundColor: stat.color, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: COLORS.border }}
+              onPress={() => onNavigate(stat.screen)}
+            >
+              <Text style={{ fontSize: 28, marginBottom: 8 }}>{stat.icon}</Text>
+              <Text style={{ fontSize: 28, fontWeight: 'bold', color: stat.textColor }}>{stat.value}</Text>
+              <Text style={{ fontSize: 12, color: COLORS.textLight }}>{stat.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <View style={{ backgroundColor: COLORS.white, borderRadius: 16, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: COLORS.border }}>
+          <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.text, marginBottom: 12 }}>👁️ View App As</Text>
+          <Text style={{ fontSize: 13, color: COLORS.textLight, marginBottom: 14 }}>Switch into any role to preview that dashboard</Text>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            {[
+              { role: 'patient', icon: '🙋', label: 'Patient', color: COLORS.patientColor },
+              { role: 'doctor', icon: '👨‍⚕️', label: 'Doctor', color: COLORS.doctorColor },
+              { role: 'pharmacy', icon: '🏪', label: 'Pharmacy', color: COLORS.pharmacyColor },
+            ].map((r) => (
+              <TouchableOpacity
+                key={r.role}
+                style={{ flex: 1, backgroundColor: r.color + '15', borderRadius: 12, paddingVertical: 12, alignItems: 'center', borderWidth: 2, borderColor: r.color }}
+                onPress={() => {
+                  Alert.alert(`View as ${r.label}`, `You will see the ${r.label} dashboard. Tap the banner to return to Admin.`, [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: `View`, onPress: () => setAdminViewAs(r.role) },
+                  ]);
+                }}
+              >
+                <Text style={{ fontSize: 24, marginBottom: 4 }}>{r.icon}</Text>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: r.color }}>{r.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        <Text style={{ fontSize: 18, fontWeight: 'bold', color: COLORS.text, marginBottom: 14 }}>Quick Actions</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
+          {[
+            { icon: '✅', label: 'Verifications', screen: 'verifications', color: '#FFF7ED' },
+            { icon: '↩️', label: 'Refunds', screen: 'refunds', color: '#FEE2E2' },
+            { icon: '💰', label: 'Revenue', screen: 'revenue', color: '#F0FDF4' },
+            { icon: '📊', label: 'Commissions', screen: 'commissions', color: '#F5F3FF' },
+            { icon: '📢', label: 'Notify Users', screen: 'sendNotification', color: '#EFF6FF' },
+            { icon: '👥', label: 'Manage Users', screen: 'users', color: '#F5F3FF' },
+          ].map((item) => (
+            <TouchableOpacity
+              key={item.label}
+              style={{ width: (width - 52) / 2, backgroundColor: item.color, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: COLORS.border }}
+              onPress={() => onNavigate(item.screen)}
+            >
+              <Text style={{ fontSize: 28, marginBottom: 8 }}>{item.icon}</Text>
+              <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.text }}>{item.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {recentNotifications.length > 0 && (
+          <>
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: COLORS.text, marginBottom: 12 }}>Recent Activity</Text>
+            {recentNotifications.map((notif) => (
+              <Card key={notif.id}>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
+                  <Text style={{ fontSize: 24 }}>{notif.data?.icon || '🔔'}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text, marginBottom: 2 }}>{notif.title}</Text>
+                    <Text style={{ fontSize: 12, color: COLORS.textLight, lineHeight: 18 }}>{notif.body}</Text>
+                    <Text style={{ fontSize: 11, color: COLORS.gray, marginTop: 4 }}>{new Date(notif.created_at).toLocaleString()}</Text>
+                  </View>
+                </View>
+              </Card>
+            ))}
+          </>
+        )}
+        <View style={{ height: 20 }} />
+      </View>
+    </ScrollView>
+  );
+}
+
+function AdminVerifications({ onBack }) {
+  const [activeTab, setActiveTab] = useState('pending');
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState(null);
+  const [adminNotes, setAdminNotes] = useState('');
+  const [processing, setProcessing] = useState(false);
+
+  useEffect(() => { fetchVerifications(); }, [activeTab]);
+
+  const fetchVerifications = async () => {
+    setLoading(true);
+    try {
+      const [docRes, pharmRes] = await Promise.all([
+        supabase.from('doctor_profiles').select('*, profiles(full_name, email, phone, created_at)').eq('verification_status', activeTab).order('created_at', { ascending: false }),
+        supabase.from('pharmacy_profiles').select('*, profiles(full_name, email, phone, created_at)').eq('verification_status', activeTab).order('created_at', { ascending: false }),
+      ]);
+      const combined = [
+        ...(docRes.data || []).map(d => ({ ...d, type: 'doctor' })),
+        ...(pharmRes.data || []).map(p => ({ ...p, type: 'pharmacy' })),
+      ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      setItems(combined);
+    } catch (error) {
+      console.log(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDecision = async (item, decision) => {
+    if (decision === 'rejected' && !adminNotes) {
+      Alert.alert('Add Notes', 'Please add a reason for rejection.');
+      return;
+    }
+    setProcessing(true);
+    try {
+      const table = item.type === 'doctor' ? 'doctor_profiles' : 'pharmacy_profiles';
+      await supabase.from(table).update({
+        verification_status: decision,
+        is_verified: decision === 'approved',
+        verification_notes: adminNotes || null,
+        verified_at: decision === 'approved' ? new Date().toISOString() : null,
+      }).eq('id', item.id);
+
+      await supabase.from('notifications').insert({
+        user_id: item.user_id,
+        title: decision === 'approved' ? '✅ Verification Approved!' : '❌ Verification Rejected',
+        body: decision === 'approved'
+          ? `Your ${item.type} account has been verified. You can now start using MediConnect!`
+          : `Your verification was not approved. ${adminNotes ? `Reason: ${adminNotes}` : 'Please contact support.'}`,
+        type: 'verification',
+        data: { icon: decision === 'approved' ? '✅' : '❌' },
+      });
+
+      Alert.alert(
+        decision === 'approved' ? '✅ Approved!' : '❌ Rejected',
+        `The ${item.type} has been ${decision}.`,
+        [{ text: 'OK', onPress: () => { setSelected(null); setAdminNotes(''); fetchVerifications(); } }]
+      );
+    } catch (error) {
+      Alert.alert('Error', error.message);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  if (selected) {
+    return (
+      <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+        <View style={{ backgroundColor: COLORS.adminColor, paddingTop: Platform.OS === 'ios' ? 50 : 40, paddingBottom: 20, paddingHorizontal: 20 }}>
+          <TouchableOpacity onPress={() => { setSelected(null); setAdminNotes(''); }} style={{ marginBottom: 12 }}>
+            <Text style={{ fontSize: 16, color: COLORS.white }}>← Back</Text>
+          </TouchableOpacity>
+          <Text style={{ fontSize: 22, fontWeight: 'bold', color: COLORS.white }}>
+            Review {selected.type === 'doctor' ? 'Doctor' : 'Pharmacy'}
+          </Text>
+        </View>
+
+        <ScrollView style={{ flex: 1, padding: 20 }}>
+          <Card>
+            <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.text, marginBottom: 14 }}>
+              {selected.type === 'doctor' ? '👨‍⚕️' : '🏪'} Profile Information
+            </Text>
+            {(selected.type === 'doctor' ? [
+              { label: 'Full Name', value: `Dr. ${selected.profiles?.full_name}` },
+              { label: 'Email', value: selected.profiles?.email },
+              { label: 'Phone', value: selected.profiles?.phone || 'Not provided' },
+              { label: 'Specialty', value: selected.specialty },
+              { label: 'License No.', value: selected.license_number },
+              { label: 'Experience', value: `${selected.years_experience || 0} years` },
+              { label: 'Hospital', value: selected.hospital_affiliation || 'Independent' },
+              { label: 'Location', value: selected.location },
+              { label: 'In-Person Fee', value: `$${selected.consultation_fee}` },
+              { label: 'Video Fee', value: `$${selected.video_call_fee || 0}` },
+              { label: 'Applied', value: new Date(selected.created_at).toLocaleDateString() },
+            ] : [
+              { label: 'Pharmacy Name', value: selected.pharmacy_name },
+              { label: 'Owner', value: selected.profiles?.full_name },
+              { label: 'Email', value: selected.profiles?.email },
+              { label: 'Phone', value: selected.phone || 'Not provided' },
+              { label: 'License No.', value: selected.license_number },
+              { label: 'Address', value: selected.address },
+              { label: 'City', value: selected.city },
+              { label: 'Country', value: selected.country },
+              { label: '24 Hours', value: selected.is_open_24h ? 'Yes' : 'No' },
+              { label: 'Delivery Radius', value: `${selected.delivery_radius_km}km` },
+              { label: 'Applied', value: new Date(selected.created_at).toLocaleDateString() },
+            ]).map((row) => (
+              <View key={row.label} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
+                <Text style={{ fontSize: 13, color: COLORS.textLight, flex: 1 }}>{row.label}</Text>
+                <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.text, flex: 2, textAlign: 'right' }}>{row.value}</Text>
+              </View>
+            ))}
+            {selected.bio && (
+              <View style={{ marginTop: 10 }}>
+                <Text style={{ fontSize: 13, color: COLORS.textLight, marginBottom: 4 }}>Bio</Text>
+                <Text style={{ fontSize: 13, color: COLORS.text, lineHeight: 20 }}>{selected.bio}</Text>
+              </View>
+            )}
+          </Card>
+
+          <View style={{ backgroundColor: '#FFF7ED', borderRadius: 14, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#FED7AA' }}>
+            <Text style={{ fontSize: 14, fontWeight: '700', color: '#92400E', marginBottom: 6 }}>📎 Document Verification</Text>
+            <Text style={{ fontSize: 13, color: '#92400E', lineHeight: 20 }}>
+              Check your email (verify@mediconnect.app) for submitted documents from this {selected.type}.
+              Verify the license, certificates and ID before approving.
+            </Text>
+          </View>
+
+          <View style={{ marginBottom: 16 }}>
+            <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text, marginBottom: 8 }}>
+              Admin Notes (shown to user if rejected)
+            </Text>
+            <TextInput
+              style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, padding: 14, fontSize: 14, height: 100, textAlignVertical: 'top', backgroundColor: COLORS.lightGray }}
+              placeholder="Add notes for the applicant..."
+              value={adminNotes}
+              onChangeText={setAdminNotes}
+              multiline
+            />
+          </View>
+
+          {activeTab === 'pending' && (
+            <View style={{ flexDirection: 'row', gap: 12, marginBottom: 40 }}>
+              <TouchableOpacity
+                style={{ flex: 1, backgroundColor: COLORS.error, borderRadius: 16, paddingVertical: 16, alignItems: 'center' }}
+                onPress={() => {
+                  Alert.alert('Reject?', 'This will reject the verification and notify the user.', [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Reject', style: 'destructive', onPress: () => handleDecision(selected, 'rejected') },
+                  ]);
+                }}
+                disabled={processing}
+              >
+                {processing ? <ActivityIndicator color={COLORS.white} /> : <Text style={{ fontSize: 15, fontWeight: 'bold', color: COLORS.white }}>❌ Reject</Text>}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flex: 2, backgroundColor: COLORS.success, borderRadius: 16, paddingVertical: 16, alignItems: 'center' }}
+                onPress={() => {
+                  Alert.alert('Approve?', 'This will approve the verification and grant them full access.', [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Approve ✅', onPress: () => handleDecision(selected, 'approved') },
+                  ]);
+                }}
+                disabled={processing}
+              >
+                {processing ? <ActivityIndicator color={COLORS.white} /> : <Text style={{ fontSize: 15, fontWeight: 'bold', color: COLORS.white }}>✅ Approve</Text>}
+              </TouchableOpacity>
+            </View>
+          )}
+        </ScrollView>
+      </View>
+    );
+  }
+
+  const tabs = [
+    { id: 'pending', label: '⏳ Pending' },
+    { id: 'approved', label: '✅ Approved' },
+    { id: 'rejected', label: '❌ Rejected' },
+  ];
+
+  return (
+    <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+      <View style={{ backgroundColor: COLORS.adminColor, paddingTop: Platform.OS === 'ios' ? 50 : 40, paddingBottom: 16, paddingHorizontal: 20 }}>
+        <TouchableOpacity onPress={onBack} style={{ marginBottom: 12 }}>
+          <Text style={{ fontSize: 16, color: COLORS.white }}>← Back</Text>
+        </TouchableOpacity>
+        <Text style={{ fontSize: 24, fontWeight: 'bold', color: COLORS.white, marginBottom: 14 }}>Verifications</Text>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          {tabs.map((tab) => (
+            <TouchableOpacity
+              key={tab.id}
+              style={{ paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, backgroundColor: activeTab === tab.id ? COLORS.white : 'rgba(255,255,255,0.2)' }}
+              onPress={() => setActiveTab(tab.id)}
+            >
+              <Text style={{ fontSize: 13, fontWeight: '700', color: activeTab === tab.id ? COLORS.adminColor : COLORS.white }}>{tab.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
+      {loading ? (
+        <ActivityIndicator style={{ marginTop: 40 }} size="large" color={COLORS.adminColor} />
+      ) : (
+        <FlatList
+          data={items}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ padding: 16 }}
+          ListEmptyComponent={<EmptyState icon="✅" title={`No ${activeTab} verifications`} subtitle="All clear!" />}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={{ backgroundColor: COLORS.white, borderRadius: 16, padding: 16, marginBottom: 12, borderLeftWidth: 4, borderLeftColor: item.type === 'doctor' ? COLORS.doctorColor : COLORS.pharmacyColor, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }}
+              onPress={() => { setSelected(item); setAdminNotes(''); }}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <Text style={{ fontSize: 20 }}>{item.type === 'doctor' ? '👨‍⚕️' : '🏪'}</Text>
+                    <Text style={{ fontSize: 15, fontWeight: 'bold', color: COLORS.text }}>
+                      {item.type === 'doctor' ? `Dr. ${item.profiles?.full_name}` : item.pharmacy_name}
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 13, color: COLORS.textLight }}>
+                    {item.type === 'doctor' ? item.specialty : `${item.city}, ${item.country}`}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: COLORS.textLight }}>📧 {item.profiles?.email}</Text>
+                </View>
+                <StatusBadge status={item.verification_status} />
+              </View>
+              {item.verification_notes && (
+                <View style={{ backgroundColor: '#FEF2F2', borderRadius: 8, padding: 8, marginTop: 4 }}>
+                  <Text style={{ fontSize: 12, color: COLORS.error }}>Note: {item.verification_notes}</Text>
+                </View>
+              )}
+              {activeTab === 'pending' && (
+                <View style={{ backgroundColor: COLORS.adminColor + '15', borderRadius: 10, paddingVertical: 8, alignItems: 'center', marginTop: 10 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.adminColor }}>Tap to Review & Decide</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          )}
+        />
+      )}
+    </View>
+  );
+}
+
+function AdminUsers({ onBack, initialFilter }) {
+  const [activeTab, setActiveTab] = useState(initialFilter || 'all');
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => { fetchUsers(); }, [activeTab]);
+
+  const fetchUsers = async () => {
+    setLoading(true);
+    try {
+      let query = supabase.from('profiles').select('*').order('created_at', { ascending: false });
+      if (activeTab !== 'all') query = query.eq('role', activeTab);
+      const { data } = await query;
+      setUsers(data || []);
+    } catch (error) {
+      console.log(error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  const handleContact = (user) => {
+    Alert.alert(
+      `Contact ${user.full_name}`,
+      `Email: ${user.email}`,
+      [
+        { text: 'Close', style: 'cancel' },
+        {
+          text: 'Send Notification', onPress: () => {
+            Alert.alert('Send Message', 'Enter message to send:', [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Send', onPress: async () => {
+                  await supabase.from('notifications').insert({
+                    user_id: user.id,
+                    title: '📢 Message from Admin',
+                    body: 'You have a message from MediConnect admin. Please check your email.',
+                    type: 'admin',
+                    data: { icon: '📢' },
+                  });
+                  Alert.alert('Sent ✅');
+                }
+              }
+            ]);
+          }
+        },
+      ]
+    );
+  };
+
+  const handleToggleActive = (user) => {
+    Alert.alert(
+      user.is_active ? 'Deactivate User?' : 'Activate User?',
+      `This will ${user.is_active ? 'prevent' : 'allow'} ${user.full_name} from accessing the app.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: user.is_active ? 'Deactivate' : 'Activate',
+          onPress: async () => {
+            await supabase.from('profiles').update({ is_active: !user.is_active }).eq('id', user.id);
+            fetchUsers();
+          }
+        }
+      ]
+    );
+  };
+
+  const filtered = users.filter(u =>
+    !searchQuery ||
+    u.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    u.email?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const tabs = [
+    { id: 'all', label: 'All' },
+    { id: 'patient', label: '🙋 Patients' },
+    { id: 'doctor', label: '👨‍⚕️ Doctors' },
+    { id: 'pharmacy', label: '🏪 Pharmacy' },
+  ];
+
+  const roleColors = { patient: COLORS.patientColor, doctor: COLORS.doctorColor, pharmacy: COLORS.pharmacyColor, admin: COLORS.adminColor };
+
+  return (
+    <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+      <View style={{ backgroundColor: COLORS.adminColor, paddingTop: Platform.OS === 'ios' ? 50 : 40, paddingBottom: 16, paddingHorizontal: 20 }}>
+        <TouchableOpacity onPress={onBack} style={{ marginBottom: 12 }}>
+          <Text style={{ fontSize: 16, color: COLORS.white }}>← Back</Text>
+        </TouchableOpacity>
+        <Text style={{ fontSize: 24, fontWeight: 'bold', color: COLORS.white, marginBottom: 14 }}>All Users</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.white, borderRadius: 12, padding: 12, gap: 10, marginBottom: 12 }}>
+          <Text style={{ fontSize: 18 }}>🔍</Text>
+          <TextInput
+            style={{ flex: 1, fontSize: 15, color: COLORS.text }}
+            placeholder="Search by name or email..."
+            placeholderTextColor={COLORS.gray}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {tabs.map((tab) => (
+              <TouchableOpacity
+                key={tab.id}
+                style={{ paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, backgroundColor: activeTab === tab.id ? COLORS.white : 'rgba(255,255,255,0.2)' }}
+                onPress={() => setActiveTab(tab.id)}
+              >
+                <Text style={{ fontSize: 13, fontWeight: '700', color: activeTab === tab.id ? COLORS.adminColor : COLORS.white }}>{tab.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </ScrollView>
+      </View>
+
+      {loading ? (
+        <ActivityIndicator style={{ marginTop: 40 }} size="large" color={COLORS.adminColor} />
+      ) : (
+        <FlatList
+          data={filtered}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ padding: 16 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchUsers(); }} />}
+          ListEmptyComponent={<EmptyState icon="👥" title="No users found" subtitle="Try a different search" />}
+          renderItem={({ item }) => (
+            <Card>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                <View style={{ width: 46, height: 46, borderRadius: 23, backgroundColor: (roleColors[item.role] || COLORS.primary) + '20', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                  <Text style={{ fontSize: 22 }}>
+                    {item.role === 'doctor' ? '👨‍⚕️' : item.role === 'pharmacy' ? '🏪' : item.role === 'admin' ? '🛡️' : '🙋'}
+                  </Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 15, fontWeight: 'bold', color: COLORS.text }}>{item.full_name}</Text>
+                  <Text style={{ fontSize: 12, color: COLORS.textLight }}>{item.email}</Text>
+                  <Text style={{ fontSize: 11, color: COLORS.gray }}>Joined {new Date(item.created_at).toLocaleDateString()}</Text>
+                </View>
+                <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                  <Badge
+                    label={item.role}
+                    color={roleColors[item.role] || COLORS.primary}
+                    bgColor={(roleColors[item.role] || COLORS.primary) + '15'}
+                  />
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: item.is_active ? COLORS.success : COLORS.error }} />
+                    <Text style={{ fontSize: 11, color: item.is_active ? COLORS.success : COLORS.error }}>
+                      {item.is_active ? 'Active' : 'Inactive'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: COLORS.lightGray, borderRadius: 10, paddingVertical: 8, alignItems: 'center' }}
+                  onPress={() => handleContact(item)}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.text }}>📢 Contact</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: item.is_active ? '#FEE2E2' : '#F0FDF4', borderRadius: 10, paddingVertical: 8, alignItems: 'center' }}
+                  onPress={() => handleToggleActive(item)}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: item.is_active ? COLORS.error : COLORS.success }}>
+                    {item.is_active ? '🚫 Deactivate' : '✅ Activate'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </Card>
+          )}
+        />
+      )}
+    </View>
+  );
+}
+
+function AdminRefunds({ onBack }) {
+  const [refunds, setRefunds] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState(null);
+
+  useEffect(() => { fetchRefunds(); }, []);
+
+  const fetchRefunds = async () => {
+    try {
+      const [appts, ords] = await Promise.all([
+        supabase.from('appointments').select('*').eq('payment_status', 'refunded').order('updated_at', { ascending: false }),
+        supabase.from('orders').select('*, pharmacy_profiles(pharmacy_name)').eq('payment_status', 'refunded').order('updated_at', { ascending: false }),
+      ]);
+      const combined = [
+        ...(appts.data || []).map(a => ({ ...a, refundType: 'appointment' })),
+        ...(ords.data || []).map(o => ({ ...o, refundType: 'order' })),
+      ].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+      setRefunds(combined);
+    } catch (error) {
+      console.log(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleProcessRefund = async (item) => {
+    setProcessing(item.id);
+    try {
+      const table = item.refundType === 'appointment' ? 'appointments' : 'orders';
+      await supabase.from(table).update({ payment_status: 'refunded' }).eq('id', item.id);
+
+      const amount = item.refundType === 'appointment' ? item.fee : item.total_amount;
+
+      await supabase.from('notifications').insert({
+        user_id: item.patient_id,
+        title: '✅ Refund Processed!',
+        body: `Your refund of $${amount} has been processed. It will appear in your account within 3-5 business days.`,
+        type: 'refund',
+        data: { icon: '↩️' },
+      });
+
+      Alert.alert('Refund Processed ✅', `$${amount} refund has been processed.`);
+      fetchRefunds();
+    } catch (error) {
+      Alert.alert('Error', error.message);
+    } finally {
+      setProcessing(null);
+    }
+  };
+
+  return (
+    <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+      <View style={{ backgroundColor: COLORS.adminColor, paddingTop: Platform.OS === 'ios' ? 50 : 40, paddingBottom: 20, paddingHorizontal: 20 }}>
+        <TouchableOpacity onPress={onBack} style={{ marginBottom: 12 }}>
+          <Text style={{ fontSize: 16, color: COLORS.white }}>← Back</Text>
+        </TouchableOpacity>
+        <Text style={{ fontSize: 24, fontWeight: 'bold', color: COLORS.white }}>Refund Management</Text>
+        <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)', marginTop: 2 }}>
+          {refunds.length} refund{refunds.length !== 1 ? 's' : ''} to process
+        </Text>
+      </View>
+
+      {loading ? (
+        <ActivityIndicator style={{ marginTop: 40 }} size="large" color={COLORS.adminColor} />
+      ) : refunds.length === 0 ? (
+        <EmptyState icon="✅" title="No Pending Refunds" subtitle="All refunds have been processed" />
+      ) : (
+        <FlatList
+          data={refunds}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ padding: 16 }}
+          renderItem={({ item }) => (
+            <Card>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <Text style={{ fontSize: 20 }}>{item.refundType === 'appointment' ? '📅' : '📦'}</Text>
+                    <Text style={{ fontSize: 15, fontWeight: 'bold', color: COLORS.text }}>
+                      {item.refundType === 'appointment' ? 'Appointment Cancelled' : 'Order Cancelled'}
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 13, color: COLORS.textLight }}>Patient: {item.patient_name}</Text>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={{ fontSize: 20, fontWeight: 'bold', color: COLORS.error }}>
+                    ${item.refundType === 'appointment' ? item.fee : item.total_amount?.toFixed(2)}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: COLORS.textLight }}>Refund Amount</Text>
+                </View>
+              </View>
+
+              {(item.doctor_cancel_reason || item.pharmacy_cancel_reason) && (
+                <View style={{ backgroundColor: '#FEF2F2', borderRadius: 10, padding: 10, marginBottom: 12 }}>
+                  <Text style={{ fontSize: 12, color: COLORS.error, fontWeight: '600', marginBottom: 2 }}>Cancellation Reason:</Text>
+                  <Text style={{ fontSize: 12, color: COLORS.error }}>
+                    {item.doctor_cancel_reason || item.pharmacy_cancel_reason}
+                  </Text>
+                </View>
+              )}
+
+              <TouchableOpacity
+                style={{ backgroundColor: processing === item.id ? COLORS.gray : COLORS.success, borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
+                onPress={() => {
+                  const amount = item.refundType === 'appointment' ? item.fee : item.total_amount?.toFixed(2);
+                  Alert.alert('Process Refund', `Process $${amount} refund to ${item.patient_name}?`, [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Process ✅', onPress: () => handleProcessRefund(item) },
+                  ]);
+                }}
+                disabled={!!processing}
+              >
+                {processing === item.id
+                  ? <ActivityIndicator color={COLORS.white} />
+                  : <Text style={{ fontSize: 15, fontWeight: 'bold', color: COLORS.white }}>↩️ Process Refund</Text>
+                }
+              </TouchableOpacity>
+            </Card>
+          )}
+        />
+      )}
+    </View>
+  );
+}
+
+function AdminRevenue({ onBack }) {
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({ totalRevenue: 0, appointmentRevenue: 0, orderRevenue: 0, totalCommission: 0, thisMonthRevenue: 0 });
+  const [transactions, setTransactions] = useState([]);
+
+  useEffect(() => { fetchRevenue(); }, []);
+
+  const fetchRevenue = async () => {
+    try {
+      const [appts, ords, comms] = await Promise.all([
+        supabase.from('appointments').select('*').in('payment_status', ['held', 'released', 'refunded']).order('created_at', { ascending: false }),
+        supabase.from('orders').select('*').in('payment_status', ['held', 'released', 'refunded']).order('created_at', { ascending: false }),
+        supabase.from('commissions').select('*'),
+      ]);
+
+      const allAppts = appts.data || [];
+      const allOrds = ords.data || [];
+      const allComms = comms.data || [];
+      const now = new Date();
+
+      const apptRevenue = allAppts.reduce((s, a) => s + (a.fee || 0), 0);
+      const ordRevenue = allOrds.reduce((s, o) => s + (o.total_amount || 0), 0);
+      const totalComm = allComms.reduce((s, c) => s + (c.amount || 0), 0);
+
+      const thisMonthAppts = allAppts.filter(a => {
+        const d = new Date(a.created_at);
+        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      });
+      const thisMonthOrds = allOrds.filter(o => {
+        const d = new Date(o.created_at);
+        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      });
+
+      setStats({
+        totalRevenue: apptRevenue + ordRevenue,
+        appointmentRevenue: apptRevenue,
+        orderRevenue: ordRevenue,
+        totalCommission: totalComm,
+        thisMonthRevenue: thisMonthAppts.reduce((s, a) => s + (a.fee || 0), 0) + thisMonthOrds.reduce((s, o) => s + (o.total_amount || 0), 0),
+      });
+
+      const combined = [
+        ...allAppts.slice(0, 15).map(a => ({ ...a, txType: 'appointment', amount: a.fee })),
+        ...allOrds.slice(0, 15).map(o => ({ ...o, txType: 'order', amount: o.total_amount })),
+      ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 25);
+
+      setTransactions(combined);
+    } catch (error) {
+      console.log(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) return <ActivityIndicator style={{ flex: 1 }} color={COLORS.adminColor} />;
+
+  return (
+    <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+      <View style={{ backgroundColor: COLORS.adminColor, paddingTop: Platform.OS === 'ios' ? 50 : 40, paddingBottom: 20, paddingHorizontal: 20 }}>
+        <TouchableOpacity onPress={onBack} style={{ marginBottom: 12 }}>
+          <Text style={{ fontSize: 16, color: COLORS.white }}>← Back</Text>
+        </TouchableOpacity>
+        <Text style={{ fontSize: 24, fontWeight: 'bold', color: COLORS.white }}>Revenue</Text>
+      </View>
+
+      <ScrollView style={{ flex: 1, padding: 16 }}>
+        <View style={{ backgroundColor: COLORS.adminColor, borderRadius: 20, padding: 24, marginBottom: 16 }}>
+          <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)' }}>Total Platform Revenue</Text>
+          <Text style={{ fontSize: 44, fontWeight: 'bold', color: COLORS.white, marginVertical: 8 }}>
+            ${stats.totalRevenue.toFixed(2)}
+          </Text>
+          <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)' }}>
+            My Commission: <Text style={{ fontWeight: 'bold', color: COLORS.white }}>${stats.totalCommission.toFixed(2)}</Text>
+          </Text>
+        </View>
+
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
+          {[
+            { label: 'Appointment Revenue', value: stats.appointmentRevenue, icon: '📅', color: '#EFF6FF' },
+            { label: 'Order Revenue', value: stats.orderRevenue, icon: '📦', color: '#F0FDF4' },
+            { label: 'This Month', value: stats.thisMonthRevenue, icon: '📈', color: '#FFF7ED' },
+            { label: 'Total Commission', value: stats.totalCommission, icon: '💰', color: '#F5F3FF' },
+          ].map((s) => (
+            <View key={s.label} style={{ width: (width - 44) / 2, backgroundColor: s.color, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: COLORS.border }}>
+              <Text style={{ fontSize: 24, marginBottom: 8 }}>{s.icon}</Text>
+              <Text style={{ fontSize: 20, fontWeight: 'bold', color: COLORS.text }}>${s.value.toFixed(2)}</Text>
+              <Text style={{ fontSize: 11, color: COLORS.textLight }}>{s.label}</Text>
+            </View>
+          ))}
+        </View>
+
+        <Text style={{ fontSize: 17, fontWeight: 'bold', color: COLORS.text, marginBottom: 12 }}>Recent Transactions</Text>
+        {transactions.map((tx) => (
+          <View key={tx.id} style={{ backgroundColor: COLORS.white, borderRadius: 14, padding: 14, marginBottom: 10, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: COLORS.border }}>
+            <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: tx.txType === 'appointment' ? '#EFF6FF' : '#F0FDF4', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+              <Text style={{ fontSize: 22 }}>{tx.txType === 'appointment' ? '📅' : '📦'}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text }}>{tx.patient_name}</Text>
+              <Text style={{ fontSize: 12, color: COLORS.textLight }}>
+                {tx.txType === 'appointment' ? 'Appointment' : 'Order'} • {new Date(tx.created_at).toLocaleDateString()}
+              </Text>
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={{ fontSize: 15, fontWeight: 'bold', color: COLORS.text }}>${tx.amount?.toFixed(2)}</Text>
+              <StatusBadge status={tx.payment_status} />
+            </View>
+          </View>
+        ))}
+        <View style={{ height: 40 }} />
+      </ScrollView>
+    </View>
+  );
+}
+
+function AdminCommissions({ onBack }) {
+  const [commissions, setCommissions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [total, setTotal] = useState(0);
+  const [thisMonth, setThisMonth] = useState(0);
+
+  useEffect(() => { fetchCommissions(); }, []);
+
+  const fetchCommissions = async () => {
+    try {
+      const { data } = await supabase
+        .from('commissions')
+        .select('*, appointments(patient_name, appointment_date), orders(patient_name)')
+        .order('created_at', { ascending: false });
+      const all = data || [];
+      const now = new Date();
+      setTotal(all.reduce((s, c) => s + (c.amount || 0), 0));
+      setThisMonth(
+        all.filter(c => {
+          const d = new Date(c.created_at);
+          return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+        }).reduce((s, c) => s + (c.amount || 0), 0)
+      );
+      setCommissions(all);
+    } catch (error) {
+      console.log(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+      <View style={{ backgroundColor: COLORS.adminColor, paddingTop: Platform.OS === 'ios' ? 50 : 40, paddingBottom: 20, paddingHorizontal: 20 }}>
+        <TouchableOpacity onPress={onBack} style={{ marginBottom: 12 }}>
+          <Text style={{ fontSize: 16, color: COLORS.white }}>← Back</Text>
+        </TouchableOpacity>
+        <Text style={{ fontSize: 24, fontWeight: 'bold', color: COLORS.white }}>My Commissions</Text>
+      </View>
+
+      <ScrollView style={{ flex: 1, padding: 16 }}>
+        <View style={{ backgroundColor: COLORS.adminColor, borderRadius: 20, padding: 24, marginBottom: 16 }}>
+          <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)' }}>Total Commission Earned</Text>
+          <Text style={{ fontSize: 44, fontWeight: 'bold', color: COLORS.white, marginVertical: 8 }}>${total.toFixed(2)}</Text>
+          <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)' }}>
+            This Month: <Text style={{ fontWeight: 'bold', color: COLORS.white }}>${thisMonth.toFixed(2)}</Text>
+          </Text>
+        </View>
+
+        <Text style={{ fontSize: 17, fontWeight: 'bold', color: COLORS.text, marginBottom: 12 }}>Commission History</Text>
+        {loading ? (
+          <ActivityIndicator color={COLORS.adminColor} />
+        ) : commissions.length === 0 ? (
+          <Card><Text style={{ fontSize: 14, color: COLORS.textLight, textAlign: 'center' }}>No commissions yet</Text></Card>
+        ) : (
+          commissions.map((item) => {
+            const isAppt = !!item.appointment_id;
+            const patientName = isAppt ? item.appointments?.patient_name : item.orders?.patient_name;
+            return (
+              <View key={item.id} style={{ backgroundColor: COLORS.white, borderRadius: 14, padding: 14, marginBottom: 10, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: COLORS.border }}>
+                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#F5F3FF', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                  <Text style={{ fontSize: 22 }}>{isAppt ? '📅' : '📦'}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text }}>{patientName || 'Patient'}</Text>
+                  <Text style={{ fontSize: 12, color: COLORS.textLight }}>
+                    {isAppt ? 'Appointment' : 'Order'} • {new Date(item.created_at).toLocaleDateString()}
+                  </Text>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.adminColor }}>+${item.amount?.toFixed(2)}</Text>
+                  <StatusBadge status={item.status} />
+                </View>
+              </View>
+            );
+          })
+        )}
+        <View style={{ height: 40 }} />
+      </ScrollView>
+    </View>
+  );
+}
+
+function AdminSendNotification({ onBack }) {
+  const [targetType, setTargetType] = useState('all');
+  const [title, setTitle] = useState('');
+  const [message, setMessage] = useState('');
+  const [sending, setSending] = useState(false);
+
+  const targets = [
+    { id: 'all', label: '👥 Everyone' },
+    { id: 'patient', label: '🙋 Patients' },
+    { id: 'doctor', label: '👨‍⚕️ Doctors' },
+    { id: 'pharmacy', label: '🏪 Pharmacies' },
+  ];
+
+  const handleSend = async () => {
+    if (!title || !message) { Alert.alert('Error', 'Please fill in title and message'); return; }
+    setSending(true);
+    try {
+      let query = supabase.from('profiles').select('id');
+      if (targetType !== 'all') query = query.eq('role', targetType);
+      const { data: users } = await query;
+      if (!users?.length) { Alert.alert('No users found'); return; }
+
+      await supabase.from('notifications').insert(
+        users.map(u => ({
+          user_id: u.id,
+          title,
+          body: message,
+          type: 'admin',
+          data: { icon: '📢' },
+        }))
+      );
+
+      Alert.alert('Sent ✅', `Notification sent to ${users.length} user${users.length !== 1 ? 's' : ''}.`);
+      setTitle('');
+      setMessage('');
+    } catch (error) {
+      Alert.alert('Error', error.message);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+      <View style={{ backgroundColor: COLORS.adminColor, paddingTop: Platform.OS === 'ios' ? 50 : 40, paddingBottom: 20, paddingHorizontal: 20 }}>
+        <TouchableOpacity onPress={onBack} style={{ marginBottom: 12 }}>
+          <Text style={{ fontSize: 16, color: COLORS.white }}>← Back</Text>
+        </TouchableOpacity>
+        <Text style={{ fontSize: 24, fontWeight: 'bold', color: COLORS.white }}>Send Notification</Text>
+      </View>
+
+      <ScrollView style={{ flex: 1, padding: 20 }}>
+        <View style={{ marginBottom: 20 }}>
+          <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.text, marginBottom: 10 }}>Send To</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {targets.map((t) => (
+              <TouchableOpacity
+                key={t.id}
+                style={{ paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, backgroundColor: targetType === t.id ? COLORS.adminColor : COLORS.white, borderWidth: 1, borderColor: targetType === t.id ? COLORS.adminColor : COLORS.border }}
+                onPress={() => setTargetType(t.id)}
+              >
+                <Text style={{ fontSize: 13, fontWeight: '600', color: targetType === t.id ? COLORS.white : COLORS.text }}>{t.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        <Input label="Notification Title" value={title} onChangeText={setTitle} placeholder="e.g. App Update Available" icon="📢" />
+
+        <View style={{ marginBottom: 20 }}>
+          <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text, marginBottom: 8 }}>Message</Text>
+          <TextInput
+            style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, padding: 14, fontSize: 14, height: 120, textAlignVertical: 'top', backgroundColor: COLORS.lightGray }}
+            placeholder="Write your message here..."
+            value={message}
+            onChangeText={setMessage}
+            multiline
+          />
+        </View>
+
+        {(title || message) && (
+          <Card style={{ marginBottom: 20 }}>
+            <Text style={{ fontSize: 13, color: COLORS.textLight, marginBottom: 10 }}>Preview</Text>
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <Text style={{ fontSize: 24 }}>📢</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 14, fontWeight: 'bold', color: COLORS.text, marginBottom: 4 }}>{title || 'Title'}</Text>
+                <Text style={{ fontSize: 13, color: COLORS.textLight }}>{message || 'Message'}</Text>
+              </View>
+            </View>
+          </Card>
+        )}
+
+        <Button
+          label="📢 Send Notification"
+          onPress={handleSend}
+          loading={sending}
+          color={COLORS.adminColor}
+          style={{ marginBottom: 40 }}
+        />
+      </ScrollView>
+    </View>
+  );
+}
+
+function AdminAppointments({ onBack }) {
+  const [appointments, setAppointments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => { fetchAppointments(); }, [activeTab]);
+
+  const fetchAppointments = async () => {
+    setLoading(true);
+    try {
+      let query = supabase.from('appointments').select('*').order('created_at', { ascending: false }).limit(50);
+      if (activeTab !== 'all') query = query.eq('status', activeTab);
+      const { data } = await query;
+      setAppointments(data || []);
+    } catch (error) {
+      console.log(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filtered = appointments.filter(a =>
+    !searchQuery ||
+    a.patient_name?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  return (
+    <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+      <View style={{ backgroundColor: COLORS.adminColor, paddingTop: Platform.OS === 'ios' ? 50 : 40, paddingBottom: 16, paddingHorizontal: 20 }}>
+        <TouchableOpacity onPress={onBack} style={{ marginBottom: 12 }}>
+          <Text style={{ fontSize: 16, color: COLORS.white }}>← Back</Text>
+        </TouchableOpacity>
+        <Text style={{ fontSize: 24, fontWeight: 'bold', color: COLORS.white, marginBottom: 12 }}>All Appointments</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.white, borderRadius: 12, padding: 12, gap: 10, marginBottom: 12 }}>
+          <Text>🔍</Text>
+          <TextInput
+            style={{ flex: 1, fontSize: 15, color: COLORS.text }}
+            placeholder="Search patient name..."
+            placeholderTextColor={COLORS.gray}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {['all', 'pending', 'confirmed', 'completed', 'cancelled'].map((tab) => (
+              <TouchableOpacity
+                key={tab}
+                style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: activeTab === tab ? COLORS.white : 'rgba(255,255,255,0.2)' }}
+                onPress={() => setActiveTab(tab)}
+              >
+                <Text style={{ fontSize: 12, fontWeight: '700', color: activeTab === tab ? COLORS.adminColor : COLORS.white, textTransform: 'capitalize' }}>{tab}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </ScrollView>
+      </View>
+
+      {loading ? (
+        <ActivityIndicator style={{ marginTop: 40 }} color={COLORS.adminColor} />
+      ) : (
+        <FlatList
+          data={filtered}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ padding: 16 }}
+          ListEmptyComponent={<EmptyState icon="📅" title="No appointments found" subtitle="Try a different filter" />}
+          renderItem={({ item }) => (
+            <Card>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: 'bold', color: COLORS.text }}>{item.patient_name}</Text>
+                  <Text style={{ fontSize: 12, color: COLORS.textLight }}>{item.appointment_date} • {item.appointment_type}</Text>
+                </View>
+                <StatusBadge status={item.status} />
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ fontSize: 13, fontWeight: 'bold', color: COLORS.text }}>${item.fee}</Text>
+                <StatusBadge status={item.payment_status} />
+              </View>
+            </Card>
+          )}
+        />
+      )}
+    </View>
+  );
+}
+
+function AdminOrders({ onBack }) {
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('all');
+
+  useEffect(() => { fetchOrders(); }, [activeTab]);
+
+  const fetchOrders = async () => {
+    setLoading(true);
+    try {
+      let query = supabase.from('orders').select('*, pharmacy_profiles(pharmacy_name)').order('created_at', { ascending: false }).limit(50);
+      if (activeTab !== 'all') query = query.eq('status', activeTab);
+      const { data } = await query;
+      setOrders(data || []);
+    } catch (error) {
+      console.log(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+      <View style={{ backgroundColor: COLORS.adminColor, paddingTop: Platform.OS === 'ios' ? 50 : 40, paddingBottom: 16, paddingHorizontal: 20 }}>
+        <TouchableOpacity onPress={onBack} style={{ marginBottom: 12 }}>
+          <Text style={{ fontSize: 16, color: COLORS.white }}>← Back</Text>
+        </TouchableOpacity>
+        <Text style={{ fontSize: 24, fontWeight: 'bold', color: COLORS.white, marginBottom: 14 }}>All Orders</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {['all', 'pending', 'confirmed', 'out_for_delivery', 'delivered', 'cancelled'].map((tab) => (
+              <TouchableOpacity
+                key={tab}
+                style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: activeTab === tab ? COLORS.white : 'rgba(255,255,255,0.2)' }}
+                onPress={() => setActiveTab(tab)}
+              >
+                <Text style={{ fontSize: 12, fontWeight: '700', color: activeTab === tab ? COLORS.adminColor : COLORS.white, textTransform: 'capitalize' }}>
+                  {tab.replace(/_/g, ' ')}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </ScrollView>
+      </View>
+
+      {loading ? (
+        <ActivityIndicator style={{ marginTop: 40 }} color={COLORS.adminColor} />
+      ) : (
+        <FlatList
+          data={orders}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ padding: 16 }}
+          ListEmptyComponent={<EmptyState icon="📦" title="No orders found" subtitle="Try a different filter" />}
+          renderItem={({ item }) => (
+            <Card>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: 'bold', color: COLORS.text }}>{item.patient_name}</Text>
+                  <Text style={{ fontSize: 12, color: COLORS.textLight }}>{item.pharmacy_profiles?.pharmacy_name}</Text>
+                </View>
+                <StatusBadge status={item.status} />
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ fontSize: 13, color: COLORS.textLight }}>
+                  🛒 {(item.items || []).length} items • {new Date(item.created_at).toLocaleDateString()}
+                </Text>
+                <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 13, fontWeight: 'bold', color: COLORS.text }}>${item.total_amount?.toFixed(2)}</Text>
+                  <StatusBadge status={item.payment_status} />
+                </View>
+              </View>
+            </Card>
+          )}
+        />
+      )}
+    </View>
+  );
+}
+
+function AdminSettings({ user, profile, onLogout, onNavigate }) {
+  const { setAdminViewAs, setShowNotifications } = useApp();
+
+  return (
+    <ScrollView style={{ flex: 1, backgroundColor: COLORS.background }}>
+      <View style={{ backgroundColor: COLORS.adminColor, paddingTop: Platform.OS === 'ios' ? 50 : 40, paddingBottom: 40, paddingHorizontal: 24, borderBottomLeftRadius: 30, borderBottomRightRadius: 30, alignItems: 'center' }}>
+        <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
+          <Text style={{ fontSize: 40 }}>🛡️</Text>
+        </View>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: COLORS.white, marginBottom: 2 }}>{profile.full_name}</Text>
+        <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)' }}>{user?.email}</Text>
+        <View style={{ backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 6, marginTop: 10 }}>
+          <Text style={{ fontSize: 13, color: COLORS.white }}>🛡️ Platform Admin</Text>
+        </View>
+      </View>
+
+      <View style={{ padding: 20 }}>
+        <Card>
+          <Text style={{ fontSize: 15, fontWeight: 'bold', color: COLORS.text, marginBottom: 12 }}>👁️ View App As</Text>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            {[
+              { role: 'patient', icon: '🙋', label: 'Patient', color: COLORS.patientColor },
+              { role: 'doctor', icon: '👨‍⚕️', label: 'Doctor', color: COLORS.doctorColor },
+              { role: 'pharmacy', icon: '🏪', label: 'Pharmacy', color: COLORS.pharmacyColor },
+            ].map((r) => (
+              <TouchableOpacity
+                key={r.role}
+                style={{ flex: 1, backgroundColor: r.color + '15', borderRadius: 12, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: r.color }}
+                onPress={() => setAdminViewAs(r.role)}
+              >
+                <Text style={{ fontSize: 22, marginBottom: 4 }}>{r.icon}</Text>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: r.color }}>{r.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </Card>
+
+        <View style={{ backgroundColor: COLORS.white, borderRadius: 16, overflow: 'hidden', marginBottom: 16 }}>
+          {[
+            { icon: '🔔', label: 'Notifications', onPress: () => setShowNotifications(true) },
+            { icon: '📊', label: 'Commissions', onPress: () => onNavigate('commissions') },
+            { icon: '📢', label: 'Send Notification', onPress: () => onNavigate('sendNotification') },
+            { icon: '↩️', label: 'Process Refunds', onPress: () => onNavigate('refunds') },
+            { icon: '✅', label: 'Verifications', onPress: () => onNavigate('verifications') },
+            { icon: '🔒', label: 'Privacy & Security' },
+            { icon: '❓', label: 'Help & Support' },
+          ].map((item, index, arr) => (
+            <TouchableOpacity
+              key={item.label}
+              style={{ flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: index < arr.length - 1 ? 1 : 0, borderBottomColor: COLORS.border }}
+              onPress={item.onPress}
+            >
+              <Text style={{ fontSize: 22, marginRight: 14 }}>{item.icon}</Text>
+              <Text style={{ flex: 1, fontSize: 15, color: COLORS.text }}>{item.label}</Text>
+              <Text style={{ fontSize: 18, color: COLORS.gray }}>›</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <TouchableOpacity
+          style={{ backgroundColor: COLORS.error + '15', borderRadius: 16, paddingVertical: 16, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 30 }}
+          onPress={onLogout}
+        >
+          <Text style={{ fontSize: 20 }}>🚪</Text>
+          <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.error }}>Log Out</Text>
+        </TouchableOpacity>
+
+        <Text style={{ fontSize: 12, color: COLORS.textLight, textAlign: 'center' }}>
+          MediConnect v2.0 • Admin Portal{'\n'}© 2026 Reine Mande Ltd. All rights reserved.
+        </Text>
+        <View style={{ height: 20 }} />
+      </View>
+    </ScrollView>
+  );
+}
+// ============================================
+// PART 6 — FINAL APP ENTRY POINT + WIRING
+// This is the last part. Paste after Part 5.
+// ============================================
+
+export default function App() {
+  const [screen, setScreen] = useState('loading');
+  const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [doctorProfile, setDoctorProfile] = useState(null);
+  const [pharmacyProfile, setPharmacyProfile] = useState(null);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [adminViewAs, setAdminViewAs] = useState(null);
+  const [toast, setToast] = useState(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        setUser(session.user);
+        fetchProfile(session.user.id);
+      } else {
+        setScreen('splash');
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        setUser(session.user);
+        fetchProfile(session.user.id);
+      } else {
+        setUser(null);
+        setProfile(null);
+        setDoctorProfile(null);
+        setPharmacyProfile(null);
+        setAdminViewAs(null);
+        setScreen('onboarding');
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const fetchProfile = async (userId) => {
+    try {
+      const { data: prof, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error) throw error;
+      setProfile(prof);
+
+      if (prof?.role === 'doctor') {
+        const { data: dp } = await supabase
+          .from('doctor_profiles')
+          .select('*')
+          .eq('user_id', userId)
+          .single();
+        setDoctorProfile(dp || null);
+      }
+
+      if (prof?.role === 'pharmacy') {
+        const { data: pp } = await supabase
+          .from('pharmacy_profiles')
+          .select('*')
+          .eq('user_id', userId)
+          .single();
+        setPharmacyProfile(pp || null);
+      }
+
+      setScreen('main');
+    } catch (error) {
+      console.log('Profile fetch error:', error.message);
+      setScreen('main');
+    }
+  };
+
+  const handleLogout = async () => {
+    Alert.alert('Log Out', 'Are you sure you want to log out?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Log Out',
+        style: 'destructive',
+        onPress: async () => {
+          await supabase.auth.signOut();
+          setUser(null);
+          setProfile(null);
+          setDoctorProfile(null);
+          setPharmacyProfile(null);
+          setAdminViewAs(null);
+          setScreen('onboarding');
+        },
+      },
+    ]);
+  };
+
+  const contextValue = {
+    user,
+    profile,
+    doctorProfile,
+    pharmacyProfile,
+    handleLogout,
+    adminViewAs,
+    setAdminViewAs,
+    showNotifications,
+    setShowNotifications,
+  };
+
+  // ============================================
+  // LOADING SCREEN
+  // ============================================
+  if (screen === 'loading') {
+    return (
+      <View style={{ flex: 1, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center' }}>
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+        <View style={{ width: 120, height: 120, borderRadius: 30, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', marginBottom: 24 }}>
+          <Text style={{ fontSize: 60 }}>🏥</Text>
+        </View>
+        <Text style={{ fontSize: 36, fontWeight: 'bold', color: COLORS.white, marginBottom: 8 }}>MediConnect</Text>
+        <Text style={{ fontSize: 16, color: 'rgba(255,255,255,0.8)', marginBottom: 40 }}>Your Health, Delivered</Text>
+        <ActivityIndicator color="rgba(255,255,255,0.8)" size="large" />
+      </View>
+    );
+  }
+
+  return (
+    <AppContext.Provider value={contextValue}>
+      <View style={{ flex: 1 }}>
+        <StatusBar barStyle="dark-content" />
+
+        {/* ============================================
+            AUTH SCREENS
+            ============================================ */}
+        {screen === 'splash' && (
+          <SplashScreen onDone={() => setScreen('onboarding')} />
+        )}
+
+        {screen === 'onboarding' && (
+          <OnboardingScreen
+            onGetStarted={() => setScreen('login')}
+            onLogin={() => setScreen('login')}
+          />
+        )}
+
+        {screen === 'login' && (
+          <LoginScreen
+            onLogin={(u) => {
+              setUser(u);
+              fetchProfile(u.id);
+            }}
+            onRegister={() => setScreen('register')}
+          />
+        )}
+
+        {screen === 'register' && (
+          <RegisterScreen
+            onRegister={() => setScreen('login')}
+            onLogin={() => setScreen('login')}
+          />
+        )}
+
+        {/* ============================================
+            MAIN APP — ROLE BASED ROUTING
+            ============================================ */}
+        {screen === 'main' && profile && (
+          <MainRouter
+            profile={profile}
+            doctorProfile={doctorProfile}
+            pharmacyProfile={pharmacyProfile}
+            adminViewAs={adminViewAs}
+            setAdminViewAs={setAdminViewAs}
+            onLogout={handleLogout}
+          />
+        )}
+
+        {/* ============================================
+            GLOBAL NOTIFICATIONS OVERLAY
+            ============================================ */}
+        {showNotifications && user && (
+          <View style={{
+            position: 'absolute',
+            top: 0, left: 0, right: 0, bottom: 0,
+            zIndex: 9998,
+          }}>
+            <NotificationsScreen
+              userId={user.id}
+              onBack={() => setShowNotifications(false)}
+            />
+          </View>
+        )}
+
+        {/* ============================================
+            GLOBAL TOAST
+            ============================================ */}
+        {toast && (
+          <ToastNotification
+            message={toast}
+            visible={!!toast}
+            onHide={() => setToast(null)}
+          />
+        )}
+      </View>
+    </AppContext.Provider>
+  );
+}
+
+// ============================================
+// MAIN ROUTER
+// Decides which shell to show based on role
+// ============================================
+function MainRouter({
+  profile,
+  doctorProfile,
+  pharmacyProfile,
+  adminViewAs,
+  setAdminViewAs,
+  onLogout,
+}) {
+  const effectiveRole = adminViewAs || profile.role;
+
+  return (
+    <View style={{ flex: 1 }}>
+      {/* Admin "Viewing As" Banner */}
+      {adminViewAs && (
+        <TouchableOpacity
+          style={{
+            backgroundColor: COLORS.adminColor,
+            paddingTop: Platform.OS === 'ios' ? 50 : 30,
+            paddingBottom: 12,
+            paddingHorizontal: 20,
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            zIndex: 999,
+          }}
+          onPress={() => {
+            Alert.alert(
+              'Return to Admin',
+              'Go back to your Admin Dashboard?',
+              [
+                { text: 'Stay', style: 'cancel' },
+                { text: 'Back to Admin', onPress: () => setAdminViewAs(null) },
+              ]
+            );
+          }}
+        >
+          <Text style={{ fontSize: 13, color: COLORS.white, fontWeight: '600' }}>
+            🛡️ Admin viewing as: {adminViewAs.toUpperCase()} — Tap to return
+          </Text>
+          <Text style={{ fontSize: 16, color: COLORS.white }}>✕</Text>
+        </TouchableOpacity>
+      )}
+
+      <View style={{ flex: 1 }}>
+        {/* ADMIN */}
+        {effectiveRole === 'admin' && (
+          <AdminShell
+            profile={profile}
+            onLogout={onLogout}
+          />
+        )}
+
+        {/* DOCTOR */}
+        {effectiveRole === 'doctor' && (
+          !doctorProfile
+            ? <DoctorVerificationScreen profile={profile} onLogout={onLogout} />
+            : doctorProfile.verification_status !== 'approved'
+            ? <PendingVerificationScreen
+                profile={{
+                  ...profile,
+                  ...doctorProfile,
+                  documents_submitted: !!doctorProfile.license_document_url,
+                }}
+                onLogout={onLogout}
+                onCompleteVerification={() => {}}
+              />
+            : <DoctorShell
+                profile={profile}
+                doctorProfile={doctorProfile}
+                onLogout={onLogout}
+              />
+        )}
+
+        {/* PHARMACY */}
+        {effectiveRole === 'pharmacy' && (
+          !pharmacyProfile
+            ? <PharmacyVerificationScreen profile={profile} onLogout={onLogout} />
+            : pharmacyProfile.verification_status !== 'approved'
+            ? <PendingVerificationScreen
+                profile={{
+                  ...profile,
+                  ...pharmacyProfile,
+                  documents_submitted: !!pharmacyProfile.license_document_url,
+                }}
+                onLogout={onLogout}
+                onCompleteVerification={() => {}}
+              />
+            : <PharmacyShell
+                profile={profile}
+                pharmacyProfile={pharmacyProfile}
+                onLogout={onLogout}
+              />
+        )}
+
+        {/* PATIENT */}
+        {effectiveRole === 'patient' && (
+          <PatientShell
+            profile={profile}
+            onLogout={onLogout}
+          />
+        )}
+      </View>
+    </View>
+  );
+}
