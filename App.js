@@ -30,6 +30,7 @@ const COLORS = {
   background: '#F9FAFB',
 };
 
+// ─── SPLASH ───────────────────────────────────────────────
 function SplashScreen({ onDone }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.5)).current;
@@ -60,6 +61,7 @@ function SplashScreen({ onDone }) {
   );
 }
 
+// ─── ONBOARDING ───────────────────────────────────────────
 function OnboardingScreen({ onDone, onLogin }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef(null);
@@ -115,21 +117,36 @@ function OnboardingScreen({ onDone, onLogin }) {
   );
 }
 
+// ─── LOGIN ────────────────────────────────────────────────
 function LoginScreen({ onLogin, onRegister }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
   const handleLogin = async () => {
     if (!email || !password) { Alert.alert('Error', 'Please fill in all fields'); return; }
     setLoading(true);
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      onLogin(data.user);
-    } catch (error) { Alert.alert('Login Failed', error.message); }
-    finally { setLoading(false); }
+
+      // Fetch profile from DB — never trust metadata for role
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', data.user.id)
+        .single();
+
+      if (profileError) throw profileError;
+      onLogin(data.user, profile);
+    } catch (error) {
+      Alert.alert('Login Failed', error.message);
+    } finally {
+      setLoading(false);
+    }
   };
+
   return (
     <ScrollView style={{ flex: 1, backgroundColor: COLORS.white }} contentContainerStyle={{ flexGrow: 1 }}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
@@ -151,7 +168,11 @@ function LoginScreen({ onLogin, onRegister }) {
             </TouchableOpacity>
           </View>
         </View>
-        <TouchableOpacity style={{ backgroundColor: loading ? COLORS.gray : COLORS.primary, borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginBottom: 16 }} onPress={handleLogin} disabled={loading}>
+        <TouchableOpacity
+          style={{ backgroundColor: loading ? COLORS.gray : COLORS.primary, borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginBottom: 16 }}
+          onPress={handleLogin}
+          disabled={loading}
+        >
           {loading ? <ActivityIndicator color={COLORS.white} /> : <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.white }}>Log In</Text>}
         </TouchableOpacity>
         <TouchableOpacity style={{ alignItems: 'center', marginBottom: 24 }}>
@@ -170,6 +191,7 @@ function LoginScreen({ onLogin, onRegister }) {
   );
 }
 
+// ─── REGISTER ─────────────────────────────────────────────
 function RegisterScreen({ onRegister, onLogin }) {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -178,11 +200,13 @@ function RegisterScreen({ onRegister, onLogin }) {
   const [role, setRole] = useState('patient');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
   const roles = [
     { id: 'patient', icon: '🙋', label: 'Patient' },
     { id: 'doctor', icon: '👨‍⚕️', label: 'Doctor' },
     { id: 'pharmacy', icon: '💊', label: 'Pharmacy' },
   ];
+
   const handleRegister = async () => {
     if (!fullName || !email || !password || !confirmPassword) { Alert.alert('Error', 'Please fill in all fields'); return; }
     if (password !== confirmPassword) { Alert.alert('Error', 'Passwords do not match'); return; }
@@ -192,12 +216,7 @@ function RegisterScreen({ onRegister, onLogin }) {
       const { error } = await supabase.auth.signUp({
         email, password,
         options: {
-          data: {
-            full_name: fullName,
-            role: role,
-            is_verified: role === 'patient',
-            verification_status: role === 'patient' ? 'approved' : 'pending',
-          }
+          data: { full_name: fullName, role }
         }
       });
       if (error) throw error;
@@ -206,9 +225,13 @@ function RegisterScreen({ onRegister, onLogin }) {
       } else {
         Alert.alert('Application Submitted! 📋', `Your ${role} account is under review. Admin will verify within 24-48 hours.`, [{ text: 'OK', onPress: onLogin }]);
       }
-    } catch (error) { Alert.alert('Registration Failed', error.message); }
-    finally { setLoading(false); }
+    } catch (error) {
+      Alert.alert('Registration Failed', error.message);
+    } finally {
+      setLoading(false);
+    }
   };
+
   return (
     <ScrollView style={{ flex: 1, backgroundColor: COLORS.white }} contentContainerStyle={{ flexGrow: 1 }}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
@@ -256,7 +279,11 @@ function RegisterScreen({ onRegister, onLogin }) {
           <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text, marginBottom: 8 }}>Confirm Password</Text>
           <TextInput style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, padding: 14, fontSize: 16, backgroundColor: COLORS.lightGray }} placeholder="Confirm your password" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry={!showPassword} />
         </View>
-        <TouchableOpacity style={{ backgroundColor: loading ? COLORS.gray : COLORS.primary, borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginBottom: 16 }} onPress={handleRegister} disabled={loading}>
+        <TouchableOpacity
+          style={{ backgroundColor: loading ? COLORS.gray : COLORS.primary, borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginBottom: 16 }}
+          onPress={handleRegister}
+          disabled={loading}
+        >
           {loading ? <ActivityIndicator color={COLORS.white} /> : <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.white }}>Create Account</Text>}
         </TouchableOpacity>
         <TouchableOpacity style={{ alignItems: 'center' }} onPress={onLogin}>
@@ -267,6 +294,7 @@ function RegisterScreen({ onRegister, onLogin }) {
   );
 }
 
+// ─── PENDING VERIFICATION ─────────────────────────────────
 function PendingVerificationScreen({ role, onLogout }) {
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
@@ -274,11 +302,11 @@ function PendingVerificationScreen({ role, onLogout }) {
       <Text style={{ fontSize: 60, marginBottom: 24 }}>⏳</Text>
       <Text style={{ fontSize: 24, fontWeight: 'bold', color: COLORS.text, marginBottom: 12, textAlign: 'center' }}>Verification Pending</Text>
       <Text style={{ fontSize: 15, color: COLORS.textLight, textAlign: 'center', lineHeight: 24, marginBottom: 32 }}>
-        Your {role} account is under review by our admin team. This usually takes 24-48 hours. You will be notified once approved.
+        Your {role} account is under review. This usually takes 24-48 hours.
       </Text>
       <View style={{ backgroundColor: '#FEF3C7', borderRadius: 16, padding: 20, width: '100%', marginBottom: 32 }}>
         <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#92400E', marginBottom: 12 }}>📋 What happens next?</Text>
-        {['1. Admin reviews your application', '2. You may be contacted for documents', '3. Account approved or rejected', '4. You will be notified by email'].map((item) => (
+        {['1. Admin reviews your credentials', '2. You may be contacted for documents', '3. Account approved or rejected', '4. You will be notified by email'].map((item) => (
           <Text key={item} style={{ fontSize: 13, color: '#92400E', marginBottom: 6, lineHeight: 20 }}>{item}</Text>
         ))}
       </View>
@@ -289,7 +317,24 @@ function PendingVerificationScreen({ role, onLogout }) {
   );
 }
 
-function PatientDashboard({ user, onLogout }) {
+// ─── REJECTED SCREEN ──────────────────────────────────────
+function RejectedScreen({ role, onLogout }) {
+  return (
+    <View style={{ flex: 1, backgroundColor: COLORS.background, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+      <Text style={{ fontSize: 60, marginBottom: 24 }}>❌</Text>
+      <Text style={{ fontSize: 24, fontWeight: 'bold', color: COLORS.text, marginBottom: 12, textAlign: 'center' }}>Application Rejected</Text>
+      <Text style={{ fontSize: 15, color: COLORS.textLight, textAlign: 'center', lineHeight: 24, marginBottom: 32 }}>
+        Your {role} account application was not approved. Please contact admin for more information.
+      </Text>
+      <TouchableOpacity style={{ backgroundColor: COLORS.error, borderRadius: 16, paddingVertical: 14, paddingHorizontal: 32 }} onPress={onLogout}>
+        <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.white }}>Log Out</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+// ─── PATIENT DASHBOARD ────────────────────────────────────
+function PatientDashboard({ user, profile, onLogout }) {
   const [activeTab, setActiveTab] = useState('home');
   const tabs = [
     { id: 'home', icon: '🏠', label: 'Home' },
@@ -298,16 +343,21 @@ function PatientDashboard({ user, onLogout }) {
     { id: 'pharmacy', icon: '💊', label: 'Pharmacy' },
     { id: 'profile', icon: '👤', label: 'Profile' },
   ];
+
   const renderHome = () => (
     <ScrollView style={{ flex: 1, backgroundColor: COLORS.background }} showsVerticalScrollIndicator={false}>
       <View style={{ backgroundColor: COLORS.primary, paddingTop: 50, paddingBottom: 30, paddingHorizontal: 24, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 }}>
         <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)' }}>Good day 👋</Text>
-        <Text style={{ fontSize: 22, fontWeight: 'bold', color: COLORS.white }}>{user?.user_metadata?.full_name || 'Patient'}</Text>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: COLORS.white }}>{profile?.full_name || 'Patient'}</Text>
       </View>
       <View style={{ padding: 24 }}>
         <View style={{ flexDirection: 'row', gap: 12, marginBottom: 24 }}>
-          {[{ icon: '👨‍⚕️', label: 'Find Doctor', tab: 'search' }, { icon: '💊', label: 'Pharmacy', tab: 'pharmacy' }, { icon: '📅', label: 'My Bookings', tab: 'bookings' }].map((item) => (
-            <TouchableOpacity key={item.label} style={{ flex: 1, backgroundColor: COLORS.white, borderRadius: 16, padding: 16, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }} onPress={() => setActiveTab(item.tab)}>
+          {[
+            { icon: '👨‍⚕️', label: 'Find Doctor', tab: 'search' },
+            { icon: '💊', label: 'Pharmacy', tab: 'pharmacy' },
+            { icon: '📅', label: 'My Bookings', tab: 'bookings' },
+          ].map((item) => (
+            <TouchableOpacity key={item.label} style={{ flex: 1, backgroundColor: COLORS.white, borderRadius: 16, padding: 16, alignItems: 'center', elevation: 2 }} onPress={() => setActiveTab(item.tab)}>
               <Text style={{ fontSize: 30, marginBottom: 8 }}>{item.icon}</Text>
               <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.text, textAlign: 'center' }}>{item.label}</Text>
             </TouchableOpacity>
@@ -346,20 +396,22 @@ function PatientDashboard({ user, onLogout }) {
       </View>
     </ScrollView>
   );
+
   const renderComingSoon = (title, icon) => (
     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background }}>
       <Text style={{ fontSize: 60, marginBottom: 16 }}>{icon}</Text>
       <Text style={{ fontSize: 22, fontWeight: 'bold', color: COLORS.text, marginBottom: 8 }}>{title}</Text>
-      <Text style={{ fontSize: 14, color: COLORS.textLight }}>Coming in next update</Text>
+      <Text style={{ fontSize: 14, color: COLORS.textLight }}>Coming soon</Text>
     </View>
   );
+
   const renderProfile = () => (
     <ScrollView style={{ flex: 1, backgroundColor: COLORS.background }}>
       <View style={{ backgroundColor: COLORS.primary, paddingTop: 50, paddingBottom: 40, paddingHorizontal: 24, borderBottomLeftRadius: 30, borderBottomRightRadius: 30, alignItems: 'center' }}>
         <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
           <Text style={{ fontSize: 40 }}>👤</Text>
         </View>
-        <Text style={{ fontSize: 22, fontWeight: 'bold', color: COLORS.white, marginBottom: 4 }}>{user?.user_metadata?.full_name || 'Patient'}</Text>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: COLORS.white, marginBottom: 4 }}>{profile?.full_name || 'Patient'}</Text>
         <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)' }}>{user?.email}</Text>
         <View style={{ backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 6, marginTop: 8 }}>
           <Text style={{ fontSize: 13, color: COLORS.white }}>🙋 Patient</Text>
@@ -373,6 +425,7 @@ function PatientDashboard({ user, onLogout }) {
       </View>
     </ScrollView>
   );
+
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
@@ -396,7 +449,8 @@ function PatientDashboard({ user, onLogout }) {
   );
 }
 
-function DoctorDashboard({ user, onLogout }) {
+// ─── DOCTOR DASHBOARD ─────────────────────────────────────
+function DoctorDashboard({ user, profile, onLogout }) {
   const [activeTab, setActiveTab] = useState('home');
   const tabs = [
     { id: 'home', icon: '🏠', label: 'Home' },
@@ -405,23 +459,28 @@ function DoctorDashboard({ user, onLogout }) {
     { id: 'earnings', icon: '💰', label: 'Earnings' },
     { id: 'profile', icon: '👤', label: 'Profile' },
   ];
+
   const renderHome = () => (
     <ScrollView style={{ flex: 1, backgroundColor: COLORS.background }} showsVerticalScrollIndicator={false}>
       <View style={{ backgroundColor: COLORS.secondary, paddingTop: 50, paddingBottom: 30, paddingHorizontal: 24, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <View>
             <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)' }}>Welcome back 👋</Text>
-            <Text style={{ fontSize: 22, fontWeight: 'bold', color: COLORS.white }}>{user?.user_metadata?.full_name || 'Doctor'}</Text>
+            <Text style={{ fontSize: 22, fontWeight: 'bold', color: COLORS.white }}>{profile?.full_name || 'Doctor'}</Text>
           </View>
-          <View style={{ backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6 }}>
+          <View style={{ backgroundColor: COLORS.success, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6 }}>
             <Text style={{ fontSize: 12, fontWeight: 'bold', color: COLORS.white }}>✅ Verified</Text>
           </View>
         </View>
       </View>
       <View style={{ padding: 24 }}>
         <View style={{ flexDirection: 'row', gap: 12, marginBottom: 24 }}>
-          {[{ icon: '📅', label: 'Today', value: '0' }, { icon: '👥', label: 'Patients', value: '0' }, { icon: '💰', label: 'Earnings', value: '$0' }].map((stat) => (
-            <View key={stat.label} style={{ flex: 1, backgroundColor: COLORS.white, borderRadius: 16, padding: 16, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }}>
+          {[
+            { icon: '📅', label: 'Today', value: '0' },
+            { icon: '👥', label: 'Patients', value: '0' },
+            { icon: '💰', label: 'Earnings', value: '$0' },
+          ].map((stat) => (
+            <View key={stat.label} style={{ flex: 1, backgroundColor: COLORS.white, borderRadius: 16, padding: 16, alignItems: 'center', elevation: 2 }}>
               <Text style={{ fontSize: 24, marginBottom: 6 }}>{stat.icon}</Text>
               <Text style={{ fontSize: 20, fontWeight: 'bold', color: COLORS.secondary }}>{stat.value}</Text>
               <Text style={{ fontSize: 11, color: COLORS.textLight }}>{stat.label}</Text>
@@ -435,22 +494,24 @@ function DoctorDashboard({ user, onLogout }) {
       </View>
     </ScrollView>
   );
+
   const renderComingSoon = (title, icon) => (
     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background }}>
       <Text style={{ fontSize: 60, marginBottom: 16 }}>{icon}</Text>
       <Text style={{ fontSize: 22, fontWeight: 'bold', color: COLORS.text, marginBottom: 8 }}>{title}</Text>
-      <Text style={{ fontSize: 14, color: COLORS.textLight }}>Coming in next update</Text>
+      <Text style={{ fontSize: 14, color: COLORS.textLight }}>Coming soon</Text>
     </View>
   );
+
   const renderProfile = () => (
     <ScrollView style={{ flex: 1, backgroundColor: COLORS.background }}>
       <View style={{ backgroundColor: COLORS.secondary, paddingTop: 50, paddingBottom: 40, paddingHorizontal: 24, borderBottomLeftRadius: 30, borderBottomRightRadius: 30, alignItems: 'center' }}>
         <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
           <Text style={{ fontSize: 40 }}>👨‍⚕️</Text>
         </View>
-        <Text style={{ fontSize: 22, fontWeight: 'bold', color: COLORS.white, marginBottom: 4 }}>{user?.user_metadata?.full_name || 'Doctor'}</Text>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: COLORS.white, marginBottom: 4 }}>{profile?.full_name || 'Doctor'}</Text>
         <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)' }}>{user?.email}</Text>
-        <View style={{ backgroundColor: COLORS.primary, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 6, marginTop: 8 }}>
+        <View style={{ backgroundColor: COLORS.success, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 6, marginTop: 8 }}>
           <Text style={{ fontSize: 13, color: COLORS.white }}>✅ Verified Doctor</Text>
         </View>
       </View>
@@ -462,6 +523,7 @@ function DoctorDashboard({ user, onLogout }) {
       </View>
     </ScrollView>
   );
+
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.secondary} />
@@ -485,7 +547,8 @@ function DoctorDashboard({ user, onLogout }) {
   );
 }
 
-function PharmacyDashboard({ user, onLogout }) {
+// ─── PHARMACY DASHBOARD ───────────────────────────────────
+function PharmacyDashboard({ user, profile, onLogout }) {
   const [activeTab, setActiveTab] = useState('home');
   const tabs = [
     { id: 'home', icon: '🏠', label: 'Home' },
@@ -494,23 +557,28 @@ function PharmacyDashboard({ user, onLogout }) {
     { id: 'earnings', icon: '💰', label: 'Earnings' },
     { id: 'profile', icon: '👤', label: 'Profile' },
   ];
+
   const renderHome = () => (
     <ScrollView style={{ flex: 1, backgroundColor: COLORS.background }} showsVerticalScrollIndicator={false}>
       <View style={{ backgroundColor: COLORS.accent, paddingTop: 50, paddingBottom: 30, paddingHorizontal: 24, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <View>
             <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)' }}>Welcome back 👋</Text>
-            <Text style={{ fontSize: 22, fontWeight: 'bold', color: COLORS.white }}>{user?.user_metadata?.full_name || 'Pharmacy'}</Text>
+            <Text style={{ fontSize: 22, fontWeight: 'bold', color: COLORS.white }}>{profile?.full_name || 'Pharmacy'}</Text>
           </View>
-          <View style={{ backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6 }}>
+          <View style={{ backgroundColor: COLORS.success, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6 }}>
             <Text style={{ fontSize: 12, fontWeight: 'bold', color: COLORS.white }}>✅ Verified</Text>
           </View>
         </View>
       </View>
       <View style={{ padding: 24 }}>
         <View style={{ flexDirection: 'row', gap: 12, marginBottom: 24 }}>
-          {[{ icon: '📦', label: 'Orders', value: '0' }, { icon: '⏳', label: 'Pending', value: '0' }, { icon: '💰', label: 'Earnings', value: '$0' }].map((stat) => (
-            <View key={stat.label} style={{ flex: 1, backgroundColor: COLORS.white, borderRadius: 16, padding: 16, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }}>
+          {[
+            { icon: '📦', label: 'Orders', value: '0' },
+            { icon: '⏳', label: 'Pending', value: '0' },
+            { icon: '💰', label: 'Earnings', value: '$0' },
+          ].map((stat) => (
+            <View key={stat.label} style={{ flex: 1, backgroundColor: COLORS.white, borderRadius: 16, padding: 16, alignItems: 'center', elevation: 2 }}>
               <Text style={{ fontSize: 24, marginBottom: 6 }}>{stat.icon}</Text>
               <Text style={{ fontSize: 20, fontWeight: 'bold', color: COLORS.accent }}>{stat.value}</Text>
               <Text style={{ fontSize: 11, color: COLORS.textLight }}>{stat.label}</Text>
@@ -524,22 +592,24 @@ function PharmacyDashboard({ user, onLogout }) {
       </View>
     </ScrollView>
   );
+
   const renderComingSoon = (title, icon) => (
     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background }}>
       <Text style={{ fontSize: 60, marginBottom: 16 }}>{icon}</Text>
       <Text style={{ fontSize: 22, fontWeight: 'bold', color: COLORS.text, marginBottom: 8 }}>{title}</Text>
-      <Text style={{ fontSize: 14, color: COLORS.textLight }}>Coming in next update</Text>
+      <Text style={{ fontSize: 14, color: COLORS.textLight }}>Coming soon</Text>
     </View>
   );
+
   const renderProfile = () => (
     <ScrollView style={{ flex: 1, backgroundColor: COLORS.background }}>
       <View style={{ backgroundColor: COLORS.accent, paddingTop: 50, paddingBottom: 40, paddingHorizontal: 24, borderBottomLeftRadius: 30, borderBottomRightRadius: 30, alignItems: 'center' }}>
         <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
           <Text style={{ fontSize: 40 }}>🏪</Text>
         </View>
-        <Text style={{ fontSize: 22, fontWeight: 'bold', color: COLORS.white, marginBottom: 4 }}>{user?.user_metadata?.full_name || 'Pharmacy'}</Text>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: COLORS.white, marginBottom: 4 }}>{profile?.full_name || 'Pharmacy'}</Text>
         <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)' }}>{user?.email}</Text>
-        <View style={{ backgroundColor: COLORS.primary, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 6, marginTop: 8 }}>
+        <View style={{ backgroundColor: COLORS.success, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 6, marginTop: 8 }}>
           <Text style={{ fontSize: 13, color: COLORS.white }}>✅ Verified Pharmacy</Text>
         </View>
       </View>
@@ -551,6 +621,7 @@ function PharmacyDashboard({ user, onLogout }) {
       </View>
     </ScrollView>
   );
+
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.accent} />
@@ -574,10 +645,13 @@ function PharmacyDashboard({ user, onLogout }) {
   );
 }
 
-function AdminDashboard({ user, onLogout }) {
+// ─── ADMIN DASHBOARD ──────────────────────────────────────
+function AdminDashboard({ user, profile, onLogout }) {
   const [activeTab, setActiveTab] = useState('home');
+  const [viewingAs, setViewingAs] = useState(null); // null = admin view
   const [pendingUsers, setPendingUsers] = useState([]);
   const [loading, setLoading] = useState(false);
+
   const tabs = [
     { id: 'home', icon: '🏠', label: 'Home' },
     { id: 'verify', icon: '✅', label: 'Verify' },
@@ -585,36 +659,101 @@ function AdminDashboard({ user, onLogout }) {
     { id: 'payments', icon: '💰', label: 'Payments' },
     { id: 'profile', icon: '👤', label: 'Profile' },
   ];
+
   useEffect(() => {
     if (activeTab === 'verify') fetchPending();
   }, [activeTab]);
+
   const fetchPending = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.from('profiles').select('*').eq('verification_status', 'pending');
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('verification_status', 'pending');
       if (error) throw error;
       setPendingUsers(data || []);
-    } catch (error) { console.log(error.message); }
-    finally { setLoading(false); }
+    } catch (error) {
+      console.log(error.message);
+    } finally {
+      setLoading(false);
+    }
   };
+
   const handleVerify = async (userId, action) => {
     try {
-      const { error } = await supabase.from('profiles').update({ verification_status: action, is_verified: action === 'approved' }).eq('id', userId);
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          verification_status: action,
+          is_verified: action === 'approved',
+        })
+        .eq('id', userId);
       if (error) throw error;
       Alert.alert('Done! ✅', `User has been ${action}.`);
       fetchPending();
-    } catch (error) { Alert.alert('Error', error.message); }
+    } catch (error) {
+      Alert.alert('Error', error.message);
+    }
   };
+
+  // Admin previewing other dashboards
+  if (viewingAs === 'patient') {
+    return (
+      <View style={{ flex: 1 }}>
+        <View style={{ backgroundColor: COLORS.admin, paddingTop: 50, paddingBottom: 12, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={{ color: COLORS.white, fontWeight: 'bold', fontSize: 14 }}>🔐 Admin Preview: Patient View</Text>
+          <TouchableOpacity onPress={() => setViewingAs(null)} style={{ backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 }}>
+            <Text style={{ color: COLORS.white, fontSize: 13, fontWeight: '600' }}>← Back to Admin</Text>
+          </TouchableOpacity>
+        </View>
+        <PatientDashboard user={user} profile={profile} onLogout={onLogout} />
+      </View>
+    );
+  }
+
+  if (viewingAs === 'doctor') {
+    return (
+      <View style={{ flex: 1 }}>
+        <View style={{ backgroundColor: COLORS.admin, paddingTop: 50, paddingBottom: 12, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={{ color: COLORS.white, fontWeight: 'bold', fontSize: 14 }}>🔐 Admin Preview: Doctor View</Text>
+          <TouchableOpacity onPress={() => setViewingAs(null)} style={{ backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 }}>
+            <Text style={{ color: COLORS.white, fontSize: 13, fontWeight: '600' }}>← Back to Admin</Text>
+          </TouchableOpacity>
+        </View>
+        <DoctorDashboard user={user} profile={profile} onLogout={onLogout} />
+      </View>
+    );
+  }
+
+  if (viewingAs === 'pharmacy') {
+    return (
+      <View style={{ flex: 1 }}>
+        <View style={{ backgroundColor: COLORS.admin, paddingTop: 50, paddingBottom: 12, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={{ color: COLORS.white, fontWeight: 'bold', fontSize: 14 }}>🔐 Admin Preview: Pharmacy View</Text>
+          <TouchableOpacity onPress={() => setViewingAs(null)} style={{ backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 }}>
+            <Text style={{ color: COLORS.white, fontSize: 13, fontWeight: '600' }}>← Back to Admin</Text>
+          </TouchableOpacity>
+        </View>
+        <PharmacyDashboard user={user} profile={profile} onLogout={onLogout} />
+      </View>
+    );
+  }
+
   const renderHome = () => (
     <ScrollView style={{ flex: 1, backgroundColor: COLORS.background }} showsVerticalScrollIndicator={false}>
       <View style={{ backgroundColor: COLORS.admin, paddingTop: 50, paddingBottom: 30, paddingHorizontal: 24, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 }}>
         <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)' }}>Admin Panel 🔐</Text>
-        <Text style={{ fontSize: 22, fontWeight: 'bold', color: COLORS.white }}>{user?.user_metadata?.full_name || 'Admin'}</Text>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: COLORS.white }}>{profile?.full_name || 'Admin'}</Text>
         <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', marginTop: 4 }}>MediConnect Founder & Admin</Text>
       </View>
       <View style={{ padding: 24 }}>
         <View style={{ flexDirection: 'row', gap: 12, marginBottom: 24 }}>
-          {[{ icon: '👥', label: 'Total Users', value: '0' }, { icon: '⏳', label: 'Pending', value: '0' }, { icon: '💰', label: 'Revenue', value: '$0' }].map((stat) => (
+          {[
+            { icon: '👥', label: 'Total Users', value: '0' },
+            { icon: '⏳', label: 'Pending', value: pendingUsers.length.toString() },
+            { icon: '💰', label: 'Revenue', value: '$0' },
+          ].map((stat) => (
             <View key={stat.label} style={{ flex: 1, backgroundColor: COLORS.white, borderRadius: 16, padding: 16, alignItems: 'center', elevation: 2 }}>
               <Text style={{ fontSize: 24, marginBottom: 6 }}>{stat.icon}</Text>
               <Text style={{ fontSize: 20, fontWeight: 'bold', color: COLORS.admin }}>{stat.value}</Text>
@@ -622,30 +761,46 @@ function AdminDashboard({ user, onLogout }) {
             </View>
           ))}
         </View>
-        <Text style={{ fontSize: 18, fontWeight: 'bold', color: COLORS.text, marginBottom: 16 }}>Admin Actions</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
-          {[{ icon: '✅', label: 'Verify Users', tab: 'verify' }, { icon: '👥', label: 'All Users', tab: 'users' }, { icon: '💰', label: 'Payments', tab: 'payments' }, { icon: '📊', label: 'Reports', tab: 'home' }].map((item) => (
+
+        <Text style={{ fontSize: 18, fontWeight: 'bold', color: COLORS.text, marginBottom: 16 }}>🔐 Preview Dashboards</Text>
+        <View style={{ backgroundColor: COLORS.white, borderRadius: 16, overflow: 'hidden', elevation: 2, marginBottom: 24 }}>
+          {[
+            { icon: '🙋', label: 'Patient View', key: 'patient', color: COLORS.primary },
+            { icon: '👨‍⚕️', label: 'Doctor View', key: 'doctor', color: COLORS.secondary },
+            { icon: '🏪', label: 'Pharmacy View', key: 'pharmacy', color: COLORS.accent },
+          ].map((item, index, arr) => (
+            <TouchableOpacity
+              key={item.key}
+              style={{ flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: index < arr.length - 1 ? 1 : 0, borderBottomColor: COLORS.border }}
+              onPress={() => setViewingAs(item.key)}
+            >
+              <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: item.color + '20', justifyContent: 'center', alignItems: 'center', marginRight: 14 }}>
+                <Text style={{ fontSize: 20 }}>{item.icon}</Text>
+              </View>
+              <Text style={{ flex: 1, fontSize: 15, fontWeight: '600', color: COLORS.text }}>{item.label}</Text>
+              <Text style={{ fontSize: 18, color: COLORS.gray }}>›</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <Text style={{ fontSize: 18, fontWeight: 'bold', color: COLORS.text, marginBottom: 16 }}>Quick Actions</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+          {[
+            { icon: '✅', label: 'Verify Users', tab: 'verify' },
+            { icon: '👥', label: 'All Users', tab: 'users' },
+            { icon: '💰', label: 'Payments', tab: 'payments' },
+            { icon: '📊', label: 'Reports', tab: 'home' },
+          ].map((item) => (
             <TouchableOpacity key={item.label} style={{ width: '47%', backgroundColor: COLORS.white, borderRadius: 16, padding: 20, alignItems: 'center', elevation: 2 }} onPress={() => setActiveTab(item.tab)}>
               <Text style={{ fontSize: 30, marginBottom: 8 }}>{item.icon}</Text>
               <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.text, textAlign: 'center' }}>{item.label}</Text>
             </TouchableOpacity>
           ))}
         </View>
-        <Text style={{ fontSize: 18, fontWeight: 'bold', color: COLORS.text, marginBottom: 16 }}>View Dashboards</Text>
-        <View style={{ backgroundColor: COLORS.white, borderRadius: 16, overflow: 'hidden', elevation: 2 }}>
-          {[{ icon: '🙋', label: 'Patient Dashboard', color: COLORS.primary }, { icon: '👨‍⚕️', label: 'Doctor Dashboard', color: COLORS.secondary }, { icon: '🏪', label: 'Pharmacy Dashboard', color: COLORS.accent }].map((item, index, arr) => (
-            <TouchableOpacity key={item.label} style={{ flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: index < arr.length - 1 ? 1 : 0, borderBottomColor: COLORS.border }}>
-              <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: item.color + '20', justifyContent: 'center', alignItems: 'center', marginRight: 14 }}>
-                <Text style={{ fontSize: 20 }}>{item.icon}</Text>
-              </View>
-              <Text style={{ flex: 1, fontSize: 15, fontWeight: '600', color: COLORS.text }}>{item.label}</Text>
-              <Text style={{ fontSize: 16, color: COLORS.gray }}>›</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
       </View>
     </ScrollView>
   );
+
   const renderVerify = () => (
     <ScrollView style={{ flex: 1, backgroundColor: COLORS.background }} showsVerticalScrollIndicator={false}>
       <View style={{ backgroundColor: COLORS.admin, paddingTop: 50, paddingBottom: 20, paddingHorizontal: 24 }}>
@@ -689,20 +844,22 @@ function AdminDashboard({ user, onLogout }) {
       </View>
     </ScrollView>
   );
+
   const renderComingSoon = (title, icon) => (
     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background }}>
       <Text style={{ fontSize: 60, marginBottom: 16 }}>{icon}</Text>
       <Text style={{ fontSize: 22, fontWeight: 'bold', color: COLORS.text, marginBottom: 8 }}>{title}</Text>
-      <Text style={{ fontSize: 14, color: COLORS.textLight }}>Coming in next update</Text>
+      <Text style={{ fontSize: 14, color: COLORS.textLight }}>Coming soon</Text>
     </View>
   );
+
   const renderProfile = () => (
     <ScrollView style={{ flex: 1, backgroundColor: COLORS.background }}>
       <View style={{ backgroundColor: COLORS.admin, paddingTop: 50, paddingBottom: 40, paddingHorizontal: 24, borderBottomLeftRadius: 30, borderBottomRightRadius: 30, alignItems: 'center' }}>
         <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
           <Text style={{ fontSize: 40 }}>🔐</Text>
         </View>
-        <Text style={{ fontSize: 22, fontWeight: 'bold', color: COLORS.white, marginBottom: 4 }}>{user?.user_metadata?.full_name || 'Admin'}</Text>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: COLORS.white, marginBottom: 4 }}>{profile?.full_name || 'Admin'}</Text>
         <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)' }}>{user?.email}</Text>
         <View style={{ backgroundColor: COLORS.primary, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 6, marginTop: 8 }}>
           <Text style={{ fontSize: 13, color: COLORS.white }}>🔐 Founder & Admin</Text>
@@ -716,6 +873,7 @@ function AdminDashboard({ user, onLogout }) {
       </View>
     </ScrollView>
   );
+
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.admin} />
@@ -739,44 +897,103 @@ function AdminDashboard({ user, onLogout }) {
   );
 }
 
+// ─── ROOT APP ─────────────────────────────────────────────
 export default function App() {
   const [screen, setScreen] = useState('splash');
   const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [loadingProfile, setLoadingProfile] = useState(false);
+
+  const fetchProfile = async (userId) => {
+    setLoadingProfile(true);
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      if (error) throw error;
+      setProfile(data);
+      return data;
+    } catch (error) {
+      console.log('Profile fetch error:', error.message);
+      return null;
+    } finally {
+      setLoadingProfile(false);
+    }
+  };
+
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      if (session) setScreen('main');
-      else setScreen('splash');
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user) {
+        setUser(session.user);
+        await fetchProfile(session.user.id);
+        setScreen('main');
+      } else {
+        setScreen('splash');
+      }
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      if (session) setScreen('main');
-      else setScreen('onboarding');
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        setUser(session.user);
+        await fetchProfile(session.user.id);
+        setScreen('main');
+      } else {
+        setUser(null);
+        setProfile(null);
+        setScreen('onboarding');
+      }
     });
+
     return () => subscription.unsubscribe();
   }, []);
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setUser(null);
+    setProfile(null);
     setScreen('onboarding');
   };
+
   const renderDashboard = () => {
-    const role = user?.user_metadata?.role;
-    const status = user?.user_metadata?.verification_status;
-    if (role === 'admin') return <AdminDashboard user={user} onLogout={handleLogout} />;
+    if (loadingProfile || !profile) {
+      return (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background }}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={{ marginTop: 16, color: COLORS.textLight, fontSize: 15 }}>Loading your dashboard...</Text>
+        </View>
+      );
+    }
+
+    const { role, verification_status } = profile;
+
+    // Admin — full access
+    if (role === 'admin') {
+      return <AdminDashboard user={user} profile={profile} onLogout={handleLogout} />;
+    }
+
+    // Doctor — check verification from DB
     if (role === 'doctor') {
-      if (status === 'pending' || status === 'rejected') return <PendingVerificationScreen role="doctor" onLogout={handleLogout} />;
-      return <DoctorDashboard user={user} onLogout={handleLogout} />;
+      if (verification_status === 'pending') return <PendingVerificationScreen role="doctor" onLogout={handleLogout} />;
+      if (verification_status === 'rejected') return <RejectedScreen role="doctor" onLogout={handleLogout} />;
+      return <DoctorDashboard user={user} profile={profile} onLogout={handleLogout} />;
     }
+
+    // Pharmacy — check verification from DB
     if (role === 'pharmacy') {
-      if (status === 'pending' || status === 'rejected') return <PendingVerificationScreen role="pharmacy" onLogout={handleLogout} />;
-      return <PharmacyDashboard user={user} onLogout={handleLogout} />;
+      if (verification_status === 'pending') return <PendingVerificationScreen role="pharmacy" onLogout={handleLogout} />;
+      if (verification_status === 'rejected') return <RejectedScreen role="pharmacy" onLogout={handleLogout} />;
+      return <PharmacyDashboard user={user} profile={profile} onLogout={handleLogout} />;
     }
-    return <PatientDashboard user={user} onLogout={handleLogout} />;
+
+    // Default — patient
+    return <PatientDashboard user={user} profile={profile} onLogout={handleLogout} />;
   };
+
   if (screen === 'splash') return <SplashScreen onDone={() => setScreen('onboarding')} />;
   if (screen === 'onboarding') return <OnboardingScreen onDone={() => setScreen('login')} onLogin={() => setScreen('login')} />;
-  if (screen === 'login') return <LoginScreen onLogin={(u) => { setUser(u); setScreen('main'); }} onRegister={() => setScreen('register')} />;
+  if (screen === 'login') return <LoginScreen onLogin={(u, p) => { setUser(u); setProfile(p); setScreen('main'); }} onRegister={() => setScreen('register')} />;
   if (screen === 'register') return <RegisterScreen onRegister={() => setScreen('login')} onLogin={() => setScreen('login')} />;
   if (screen === 'main') return renderDashboard();
   return null;
