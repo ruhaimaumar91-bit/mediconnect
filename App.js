@@ -8,8 +8,8 @@ import { createClient } from '@supabase/supabase-js';
 
 const { width } = Dimensions.get('window');
 
-const supabaseUrl = 'https://taaqzchrxbwqepshetnf.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRhYXF6Y2hyeGJ3cWVwc2hldG5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQzMTQwNzQsImV4cCI6MjA1OTg5MDA3NH0.Fi2Ve9lhPe8vfv-NitdV_cMoLjQmF96NT98yDFpWidjl';
+const supabaseUrl = 'https://zwkxmayoknvfpxshhbzr.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp3a3htYXlva252ZnB4c2hoYnpyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4OTE5MTgsImV4cCI6MjA5MTQ2NzkxOH0.24GuRH1YtSC3uJ1sDJ7TE00yWfATcoAWo0_ilQyo3Sc';
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 const COLORS = {
