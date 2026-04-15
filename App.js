@@ -8750,3 +8750,538 @@ function AdminDashboard({ user, profile, onLogout }) {
         </View>
       </ScrollView>
     );​​​​​​​​​​​​​​​​
+  };
+
+  // ── RENDER ADMIN BOOKINGS ─────────────────────────────────────────────────────
+  const renderAdminBookings = () => (
+    <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+      <View style={{ backgroundColor: COLORS.admin, paddingTop: 50, paddingBottom: 20, paddingHorizontal: 24 }}>
+        <Text style={{ fontSize: 24, fontWeight: 'bold', color: COLORS.white }}>📅 All Bookings</Text>
+        <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)', marginTop: 4 }}>{allBookings.length} total bookings</Text>
+      </View>
+      {loadingBookings ? <ActivityIndicator size="large" color={COLORS.admin} style={{ marginTop: 40 }} /> : (
+        <FlatList
+          data={allBookings}
+          keyExtractor={(item) => item.id}
+          showsVerticalScrollIndicator={false}
+          initialNumToRender={8}
+          maxToRenderPerBatch={5}
+          windowSize={5}
+          removeClippedSubviews={true}
+          contentContainerStyle={{ padding: 16 }}
+          ListEmptyComponent={() => (
+            <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+              <Text style={{ fontSize: 40, marginBottom: 12 }}>📅</Text>
+              <Text style={{ fontSize: 16, color: COLORS.textLight }}>No bookings yet</Text>
+            </View>
+          )}
+          renderItem={({ item: booking }) => (
+            <View style={{ backgroundColor: COLORS.white, borderRadius: 16, padding: 16, marginBottom: 12, elevation: 2 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 15, fontWeight: 'bold', color: COLORS.text }}>{booking.patient_name}</Text>
+                  <Text style={{ fontSize: 13, color: COLORS.primary }}>Dr. {booking.doctor_name}</Text>
+                  <Text style={{ fontSize: 12, color: COLORS.textLight }}>{booking.preferred_date} at {booking.preferred_time}</Text>
+                  <Text style={{ fontSize: 12, color: COLORS.textLight }}>{booking.session_type === 'video' ? '📹 Video' : '🏥 Physical'}</Text>
+                </View>
+                <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                  <View style={{ backgroundColor: booking.status === 'completed' ? '#D1FAE5' : booking.status === 'confirmed' ? '#DBEAFE' : booking.status === 'cancelled' ? '#FEE2E2' : '#FEF3C7', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '600', color: booking.status === 'completed' ? '#065F46' : booking.status === 'confirmed' ? '#1E40AF' : booking.status === 'cancelled' ? '#991B1B' : '#92400E', textTransform: 'capitalize' }}>{booking.status}</Text>
+                  </View>
+                  <Text style={{ fontSize: 14, fontWeight: 'bold', color: COLORS.secondary }}>${booking.amount}</Text>
+                </View>
+              </View>
+              {booking.status === 'completed' && booking.payment_status !== 'released' && (
+                <TouchableOpacity style={{ backgroundColor: COLORS.success, borderRadius: 12, paddingVertical: 10, alignItems: 'center' }} onPress={() => releasePayment(booking.id, booking.doctor_id, booking.patient_id, booking.amount)}>
+                  <Text style={{ fontSize: 13, fontWeight: 'bold', color: COLORS.white }}>💰 Release Payment (${(booking.amount * (1 - commissionRate / 100)).toFixed(2)} to doctor)</Text>
+                </TouchableOpacity>
+              )}
+              {booking.payment_status === 'released' && (
+                <View style={{ backgroundColor: '#D1FAE5', borderRadius: 12, paddingVertical: 8, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#065F46' }}>✅ Payment Released</Text>
+                </View>
+              )}
+            </View>
+          )}
+        />
+      )}
+    </View>
+  );
+
+  // ── RENDER PAYMENTS ───────────────────────────────────────────────────────────
+  const renderPayments = () => (
+    <ScrollView style={{ flex: 1, backgroundColor: COLORS.background }} showsVerticalScrollIndicator={false}>
+      <View style={{ backgroundColor: COLORS.admin, paddingTop: 50, paddingBottom: 20, paddingHorizontal: 24 }}>
+        <Text style={{ fontSize: 24, fontWeight: 'bold', color: COLORS.white }}>💰 Payments</Text>
+        <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)', marginTop: 4 }}>Transactions & withdrawal requests</Text>
+      </View>
+      <View style={{ padding: 24 }}>
+        <Text style={{ fontSize: 18, fontWeight: 'bold', color: COLORS.text, marginBottom: 14 }}>💸 Withdrawal Requests</Text>
+        {loadingWithdrawals ? <ActivityIndicator color={COLORS.admin} /> : withdrawalRequests.length === 0 ? (
+          <View style={{ backgroundColor: COLORS.white, borderRadius: 16, padding: 30, alignItems: 'center', marginBottom: 20, elevation: 2 }}>
+            <Text style={{ fontSize: 30, marginBottom: 8 }}>💸</Text>
+            <Text style={{ fontSize: 14, color: COLORS.textLight }}>No withdrawal requests yet</Text>
+          </View>
+        ) : withdrawalRequests.map((req) => (
+          <View key={req.id} style={{ backgroundColor: COLORS.white, borderRadius: 16, padding: 16, marginBottom: 12, elevation: 2 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+              <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: req.status === 'paid' ? '#D1FAE5' : req.status === 'rejected' ? '#FEE2E2' : '#FEF3C7', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                <Text style={{ fontSize: 22 }}>{req.status === 'paid' ? '✅' : req.status === 'rejected' ? '❌' : '⏳'}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 15, fontWeight: 'bold', color: COLORS.text }}>{req.profiles?.full_name || 'Doctor'}</Text>
+                <Text style={{ fontSize: 13, color: COLORS.textLight }}>${req.amount} via {req.payment_method?.replace('_', ' ')}</Text>
+                <Text style={{ fontSize: 11, color: COLORS.textLight }}>{new Date(req.created_at).toLocaleDateString()}</Text>
+              </View>
+              <View style={{ backgroundColor: req.status === 'paid' ? '#D1FAE5' : req.status === 'rejected' ? '#FEE2E2' : '#FEF3C7', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 }}>
+                <Text style={{ fontSize: 11, fontWeight: '600', color: req.status === 'paid' ? '#065F46' : req.status === 'rejected' ? '#991B1B' : '#92400E', textTransform: 'capitalize' }}>{req.status}</Text>
+              </View>
+            </View>
+            <View style={{ backgroundColor: COLORS.lightGray, borderRadius: 10, padding: 10, marginBottom: req.status === 'pending' ? 10 : 0 }}>
+              {req.payment_method === 'bank_transfer' && [{ label: 'Bank', value: req.bank_name }, { label: 'Account', value: req.account_number }, { label: 'Name', value: req.account_name }].map((item) => item.value ? (
+                <View key={item.label} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 }}>
+                  <Text style={{ fontSize: 11, color: COLORS.textLight }}>{item.label}</Text>
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: COLORS.text }}>{item.value}</Text>
+                </View>
+              ) : null)}
+              {req.payment_method === 'mobile_money' && <Text style={{ fontSize: 12, color: COLORS.text }}>📱 {req.mobile_money_number}</Text>}
+              {req.payment_method === 'paypal' && <Text style={{ fontSize: 12, color: COLORS.text }}>💳 {req.paypal_email}</Text>}
+            </View>
+            {req.status === 'pending' && (
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TouchableOpacity style={{ flex: 1, backgroundColor: '#D1FAE5', borderRadius: 10, paddingVertical: 10, alignItems: 'center' }} onPress={() => processWithdrawal(req.id, 'paid', req.doctor_id)}>
+                  <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#065F46' }}>✅ Mark Paid</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={{ flex: 1, backgroundColor: '#FEE2E2', borderRadius: 10, paddingVertical: 10, alignItems: 'center' }} onPress={() => processWithdrawal(req.id, 'rejected', req.doctor_id)}>
+                  <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#991B1B' }}>❌ Reject</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        ))}
+        <Text style={{ fontSize: 18, fontWeight: 'bold', color: COLORS.text, marginBottom: 14, marginTop: 8 }}>💳 Recent Transactions</Text>
+        {loadingTransactions ? <ActivityIndicator color={COLORS.admin} /> : transactions.length === 0 ? (
+          <View style={{ backgroundColor: COLORS.white, borderRadius: 16, padding: 30, alignItems: 'center', elevation: 2 }}>
+            <Text style={{ fontSize: 30, marginBottom: 8 }}>💳</Text>
+            <Text style={{ fontSize: 14, color: COLORS.textLight }}>No transactions yet</Text>
+          </View>
+        ) : transactions.map((txn) => (
+          <View key={txn.id} style={{ backgroundColor: COLORS.white, borderRadius: 14, padding: 14, marginBottom: 10, elevation: 1 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <Text style={{ fontSize: 14, fontWeight: 'bold', color: COLORS.text }}>${txn.total_amount?.toFixed(2)}</Text>
+              <View style={{ backgroundColor: '#D1FAE5', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
+                <Text style={{ fontSize: 11, fontWeight: '600', color: '#065F46', textTransform: 'capitalize' }}>{txn.status}</Text>
+              </View>
+            </View>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              {[{ label: 'Doctor Gets', value: `$${txn.doctor_amount?.toFixed(2)}`, color: '#065F46' }, { label: `Commission (${txn.commission_rate}%)`, value: `$${txn.commission_amount?.toFixed(2)}`, color: COLORS.admin }].map((item) => (
+                <View key={item.label} style={{ flex: 1, backgroundColor: COLORS.lightGray, borderRadius: 8, padding: 8 }}>
+                  <Text style={{ fontSize: 10, color: COLORS.textLight }}>{item.label}</Text>
+                  <Text style={{ fontSize: 13, fontWeight: 'bold', color: item.color }}>{item.value}</Text>
+                </View>
+              ))}
+            </View>
+            <Text style={{ fontSize: 11, color: COLORS.textLight, marginTop: 8 }}>{new Date(txn.created_at).toLocaleString()}</Text>
+          </View>
+        ))}
+      </View>
+    </ScrollView>
+  );
+
+  // ── RENDER USERS ──────────────────────────────────────────────────────────────
+  const renderUsers = () => {
+    const filtered = allUsers.filter(u => {
+      const matchesSearch = u.full_name?.toLowerCase().includes(userSearch.toLowerCase()) || u.email?.toLowerCase().includes(userSearch.toLowerCase());
+      const matchesRole = userRoleFilter === 'all' || u.role === userRoleFilter;
+      return matchesSearch && matchesRole;
+    });
+    return (
+      <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+        <View style={{ backgroundColor: COLORS.admin, paddingTop: 50, paddingBottom: 16, paddingHorizontal: 24 }}>
+          <Text style={{ fontSize: 24, fontWeight: 'bold', color: COLORS.white }}>👥 All Users</Text>
+          <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)', marginTop: 4, marginBottom: 12 }}>{filtered.length} users</Text>
+          <View style={{ flexDirection: 'row', backgroundColor: COLORS.white, borderRadius: 12, paddingHorizontal: 12, alignItems: 'center', marginBottom: 12 }}>
+            <Text style={{ fontSize: 16, marginRight: 8 }}>🔍</Text>
+            <TextInput style={{ flex: 1, paddingVertical: 10, fontSize: 14 }} placeholder="Search by name or email..." placeholderTextColor={COLORS.textLight} value={userSearch} onChangeText={setUserSearch} />
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {['all', 'patient', 'doctor', 'pharmacy', 'admin'].map((role) => (
+                <TouchableOpacity key={role} style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: userRoleFilter === role ? COLORS.white : 'rgba(255,255,255,0.2)' }} onPress={() => setUserRoleFilter(role)}>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: userRoleFilter === role ? COLORS.admin : COLORS.white, textTransform: 'capitalize' }}>{role}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
+        </View>
+        {loadingUsers ? <ActivityIndicator size="large" color={COLORS.admin} style={{ marginTop: 40 }} /> : (
+          <FlatList
+            data={filtered}
+            keyExtractor={(item) => item.id}
+            showsVerticalScrollIndicator={false}
+            initialNumToRender={10}
+            maxToRenderPerBatch={8}
+            windowSize={5}
+            removeClippedSubviews={true}
+            contentContainerStyle={{ padding: 16 }}
+            ListEmptyComponent={() => (
+              <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                <Text style={{ fontSize: 40, marginBottom: 12 }}>👥</Text>
+                <Text style={{ fontSize: 16, color: COLORS.textLight }}>No users found</Text>
+              </View>
+            )}
+            renderItem={({ item: u }) => (
+              <View style={{ backgroundColor: COLORS.white, borderRadius: 14, padding: 14, marginBottom: 10, elevation: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.primaryLight, justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                    <Text style={{ fontSize: 22 }}>{u.role === 'doctor' ? '👨‍⚕️' : u.role === 'pharmacy' ? '🏪' : u.role === 'admin' ? '🔑' : '🙋'}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontWeight: 'bold', color: COLORS.text }}>{u.full_name || 'No Name'}</Text>
+                    <Text style={{ fontSize: 12, color: COLORS.textLight }}>{u.email}</Text>
+                    <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
+                      <View style={{ backgroundColor: u.role === 'doctor' ? '#D1FAE5' : u.role === 'pharmacy' ? '#FEF3C7' : COLORS.primaryLight, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                        <Text style={{ fontSize: 10, fontWeight: '600', color: u.role === 'doctor' ? '#065F46' : u.role === 'pharmacy' ? '#92400E' : COLORS.primary, textTransform: 'capitalize' }}>{u.role}</Text>
+                      </View>
+                      {u.is_verified && <View style={{ backgroundColor: '#D1FAE5', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}><Text style={{ fontSize: 10, fontWeight: '600', color: '#065F46' }}>✅ Verified</Text></View>}
+                      {u.verification_status === 'pending' && <View style={{ backgroundColor: '#FEF3C7', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}><Text style={{ fontSize: 10, fontWeight: '600', color: '#92400E' }}>⏳ Pending</Text></View>}
+                    </View>
+                  </View>
+                  <Text style={{ fontSize: 11, color: COLORS.textLight }}>{new Date(u.created_at).toLocaleDateString()}</Text>
+                </View>
+              </View>
+            )}
+          />
+        )}
+      </View>
+    );
+  };
+
+  // ── RENDER SETTINGS ───────────────────────────────────────────────────────────
+  const renderSettings = () => (
+    <ScrollView style={{ flex: 1, backgroundColor: COLORS.background }} showsVerticalScrollIndicator={false}>
+      <View style={{ backgroundColor: COLORS.admin, paddingTop: 50, paddingBottom: 20, paddingHorizontal: 24 }}>
+        <Text style={{ fontSize: 24, fontWeight: 'bold', color: COLORS.white }}>⚙️ Platform Settings</Text>
+        <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)', marginTop: 4 }}>Configure ReineCare platform</Text>
+      </View>
+      <View style={{ padding: 24 }}>
+        {loadingSettings ? <ActivityIndicator size="large" color={COLORS.admin} style={{ marginTop: 20 }} /> : (
+          <>
+            {/* General settings */}
+            <View style={{ backgroundColor: COLORS.white, borderRadius: 16, padding: 20, marginBottom: 16, elevation: 2 }}>
+              <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.text, marginBottom: 14 }}>🌐 General Settings</Text>
+              {[{ label: 'Support Email', value: supportEmail, setter: setSupportEmail, placeholder: 'hello@reinecare.com', keyboard: 'email-address' }, { label: 'Support Phone', value: supportPhone, setter: setSupportPhone, placeholder: '+1 234 567 8900', keyboard: 'phone-pad' }, { label: 'Platform Description', value: platformDescription, setter: setPlatformDescription, placeholder: 'Brief description of the platform' }, { label: 'Minimum Withdrawal ($)', value: minWithdrawal, setter: setMinWithdrawal, placeholder: 'e.g. 10', keyboard: 'numeric' }, { label: 'Maximum Withdrawal ($)', value: maxWithdrawal, setter: setMaxWithdrawal, placeholder: 'e.g. 10000', keyboard: 'numeric' }, { label: 'Terms Version', value: termsVersion, setter: setTermsVersion, placeholder: 'e.g. 1.0' }, { label: 'Privacy Version', value: privacyVersion, setter: setPrivacyVersion, placeholder: 'e.g. 1.0' }].map((field) => (
+                <View key={field.label} style={{ marginBottom: 14 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.text, marginBottom: 6 }}>{field.label}</Text>
+                  <TextInput style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, padding: 12, fontSize: 15, backgroundColor: COLORS.lightGray }} placeholder={field.placeholder} value={field.value} onChangeText={field.setter} keyboardType={field.keyboard || 'default'} />
+                </View>
+              ))}
+            </View>
+            {/* Feature toggles */}
+            <View style={{ backgroundColor: COLORS.white, borderRadius: 16, padding: 20, marginBottom: 16, elevation: 2 }}>
+              <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.text, marginBottom: 14 }}>⚙️ Feature Toggles</Text>
+              {[{ label: '📹 Video Calls Enabled', value: videoCallEnabled, setter: setVideoCallEnabled }, { label: '💊 Pharmacy Module', value: pharmacyEnabled, setter: setPharmacyEnabled }, { label: '✅ Auto-Approve Patients', value: autoApprovePatients, setter: setAutoApprovePatients }, { label: '📋 Require Doctor License', value: requireDoctorLicense, setter: setRequireDoctorLicense }].map((toggle) => (
+                <TouchableOpacity key={toggle.label} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border }} onPress={() => toggle.setter(!toggle.value)}>
+                  <Text style={{ fontSize: 14, color: COLORS.text }}>{toggle.label}</Text>
+                  <View style={{ width: 48, height: 28, borderRadius: 14, backgroundColor: toggle.value ? COLORS.success : COLORS.border, justifyContent: 'center', paddingHorizontal: 2 }}>
+                    <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: COLORS.white, alignSelf: toggle.value ? 'flex-end' : 'flex-start' }} />
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {/* Maintenance mode */}
+            <View style={{ backgroundColor: maintenanceMode ? '#FEE2E2' : COLORS.white, borderRadius: 16, padding: 20, marginBottom: 16, elevation: 2 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: maintenanceMode ? 12 : 0 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 16, fontWeight: 'bold', color: maintenanceMode ? '#991B1B' : COLORS.text }}>🔧 Maintenance Mode</Text>
+                  <Text style={{ fontSize: 12, color: maintenanceMode ? '#991B1B' : COLORS.textLight, marginTop: 2 }}>Disables access for all users</Text>
+                </View>
+                <TouchableOpacity style={{ width: 56, height: 30, borderRadius: 15, backgroundColor: maintenanceMode ? COLORS.error : COLORS.border, justifyContent: 'center', paddingHorizontal: 2 }} onPress={() => setMaintenanceMode(!maintenanceMode)}>
+                  <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: COLORS.white, alignSelf: maintenanceMode ? 'flex-end' : 'flex-start' }} />
+                </TouchableOpacity>
+              </View>
+              {maintenanceMode && (
+                <View style={{ backgroundColor: '#FEE2E2', borderRadius: 10, padding: 12 }}>
+                  <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#991B1B' }}>⚠️ Warning: Maintenance mode is ON — users cannot access the platform!</Text>
+                </View>
+              )}
+            </View>
+            <TouchableOpacity style={{ backgroundColor: savingSettings ? COLORS.gray : COLORS.admin, borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginBottom: 20 }} onPress={savePlatformSettings} disabled={savingSettings}>
+              {savingSettings ? <ActivityIndicator color={COLORS.white} /> : <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.white }}>Save Settings ✅</Text>}
+            </TouchableOpacity>
+            {/* Broadcast system */}
+            <View style={{ backgroundColor: COLORS.white, borderRadius: 16, padding: 20, marginBottom: 16, elevation: 2 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <View>
+                  <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.text }}>📢 Broadcasts</Text>
+                  <Text style={{ fontSize: 13, color: COLORS.textLight, marginTop: 2 }}>Send announcements to users</Text>
+                </View>
+                <TouchableOpacity style={{ backgroundColor: COLORS.admin, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8 }} onPress={() => setShowBroadcastForm(!showBroadcastForm)}>
+                  <Text style={{ fontSize: 13, fontWeight: 'bold', color: COLORS.white }}>{showBroadcastForm ? '✕ Cancel' : '➕ New'}</Text>
+                </TouchableOpacity>
+              </View>
+              {showBroadcastForm && (
+                <View style={{ backgroundColor: COLORS.lightGray, borderRadius: 14, padding: 16, marginBottom: 16 }}>
+                  <Text style={{ fontSize: 15, fontWeight: 'bold', color: COLORS.text, marginBottom: 14 }}>New Broadcast</Text>
+                  {[{ label: 'Title *', value: broadcastTitle, setter: setBroadcastTitle, placeholder: 'Announcement title' }, { label: 'Message *', value: broadcastMessage, setter: setBroadcastMessage, placeholder: 'Your message to users...', multiline: true }, { label: 'Action Button Text (optional)', value: broadcastActionText, setter: setBroadcastActionText, placeholder: 'e.g. Learn More' }].map((field) => (
+                    <View key={field.label} style={{ marginBottom: 12 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.text, marginBottom: 6 }}>{field.label}</Text>
+                      <TextInput style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, padding: 12, fontSize: 15, backgroundColor: COLORS.white, minHeight: field.multiline ? 70 : undefined, textAlignVertical: field.multiline ? 'top' : undefined }} placeholder={field.placeholder} value={field.value} onChangeText={field.setter} multiline={field.multiline} />
+                    </View>
+                  ))}
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.text, marginBottom: 8 }}>Type</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      {['announcement', 'maintenance', 'promotion', 'health_tip'].map((type) => (
+                        <TouchableOpacity key={type} style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 2, borderColor: broadcastType === type ? COLORS.admin : COLORS.border, backgroundColor: broadcastType === type ? COLORS.admin : COLORS.white }} onPress={() => setBroadcastType(type)}>
+                          <Text style={{ fontSize: 12, fontWeight: '600', color: broadcastType === type ? COLORS.white : COLORS.gray, textTransform: 'capitalize' }}>{type.replace('_', ' ')}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </ScrollView>
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.text, marginBottom: 8 }}>Target Audience</Text>
+                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                    {[{ id: 'all', label: '👥 All' }, { id: 'patients', label: '🙋 Patients' }, { id: 'doctors', label: '👨‍⚕️ Doctors' }, { id: 'pharmacies', label: '🏪 Pharmacies' }].map((target) => (
+                      <TouchableOpacity key={target.id} style={{ flex: 1, borderWidth: 2, borderColor: broadcastTarget === target.id ? COLORS.admin : COLORS.border, borderRadius: 10, paddingVertical: 8, alignItems: 'center', backgroundColor: broadcastTarget === target.id ? COLORS.admin : COLORS.white }} onPress={() => setBroadcastTarget(target.id)}>
+                        <Text style={{ fontSize: 10, fontWeight: 'bold', color: broadcastTarget === target.id ? COLORS.white : COLORS.gray }}>{target.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.text, marginBottom: 6 }}>Expires in (days)</Text>
+                      <TextInput style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, padding: 10, fontSize: 14, backgroundColor: COLORS.white }} placeholder="7" value={broadcastExpiry} onChangeText={setBroadcastExpiry} keyboardType="numeric" />
+                    </View>
+                    <TouchableOpacity style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: COLORS.white, borderRadius: 10, paddingHorizontal: 12, borderWidth: 1, borderColor: COLORS.border }} onPress={() => setBroadcastPinned(!broadcastPinned)}>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.text }}>📌 Pinned</Text>
+                      <View style={{ width: 40, height: 24, borderRadius: 12, backgroundColor: broadcastPinned ? COLORS.admin : COLORS.border, justifyContent: 'center', paddingHorizontal: 2 }}>
+                        <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: COLORS.white, alignSelf: broadcastPinned ? 'flex-end' : 'flex-start' }} />
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+                  <TouchableOpacity style={{ backgroundColor: sendingBroadcast ? COLORS.gray : COLORS.admin, borderRadius: 12, paddingVertical: 12, alignItems: 'center' }} onPress={sendBroadcast} disabled={sendingBroadcast}>
+                    {sendingBroadcast ? <ActivityIndicator color={COLORS.white} /> : <Text style={{ fontSize: 14, fontWeight: 'bold', color: COLORS.white }}>📢 Send Broadcast</Text>}
+                  </TouchableOpacity>
+                </View>
+              )}
+              {loadingBroadcasts ? <ActivityIndicator color={COLORS.admin} /> : broadcasts.length === 0 ? (
+                <View style={{ alignItems: 'center', paddingVertical: 20 }}>
+                  <Text style={{ fontSize: 13, color: COLORS.textLight }}>No broadcasts yet</Text>
+                </View>
+              ) : broadcasts.map((broadcast) => (
+                <View key={broadcast.id} style={{ backgroundColor: COLORS.lightGray, borderRadius: 12, padding: 14, marginBottom: 10 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                        <Text style={{ fontSize: 14, fontWeight: 'bold', color: COLORS.text }}>{broadcast.title}</Text>
+                        {broadcast.is_pinned && <Text style={{ fontSize: 12 }}>📌</Text>}
+                      </View>
+                      <Text style={{ fontSize: 12, color: COLORS.textLight, marginBottom: 6 }}>{broadcast.message}</Text>
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <View style={{ backgroundColor: COLORS.white, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                          <Text style={{ fontSize: 10, color: COLORS.textLight, textTransform: 'capitalize' }}>{broadcast.type?.replace('_', ' ')}</Text>
+                        </View>
+                        <View style={{ backgroundColor: COLORS.white, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                          <Text style={{ fontSize: 10, color: COLORS.textLight }}>👥 {broadcast.target_audience}</Text>
+                        </View>
+                        <Text style={{ fontSize: 10, color: COLORS.textLight }}>{new Date(broadcast.created_at).toLocaleDateString()}</Text>
+                      </View>
+                    </View>
+                    <TouchableOpacity style={{ backgroundColor: '#FEE2E2', borderRadius: 8, padding: 8, marginLeft: 8 }} onPress={() => deleteBroadcast(broadcast.id)}>
+                      <Text style={{ fontSize: 14 }}>🗑️</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </>
+        )}
+      </View>
+    </ScrollView>
+  );
+
+  // ── RENDER PROFILE ────────────────────────────────────────────────────────────
+  const renderAdminProfile = () => (
+    <ScrollView style={{ flex: 1, backgroundColor: COLORS.background }} showsVerticalScrollIndicator={false}>
+      <View style={{ backgroundColor: COLORS.admin, paddingTop: 50, paddingBottom: 30, paddingHorizontal: 24, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 }}>
+        <View style={{ alignItems: 'center' }}>
+          <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
+            <Text style={{ fontSize: 44 }}>🔑</Text>
+          </View>
+          <Text style={{ fontSize: 22, fontWeight: 'bold', color: COLORS.white }}>{profile?.full_name}</Text>
+          <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)', marginTop: 4 }}>{profile?.email}</Text>
+          <View style={{ backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 4, marginTop: 8 }}>
+            <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.white }}>🔑 Platform Administrator</Text>
+          </View>
+        </View>
+      </View>
+      <View style={{ padding: 24 }}>
+        <View style={{ backgroundColor: COLORS.white, borderRadius: 16, padding: 20, marginBottom: 16, elevation: 2 }}>
+          <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.text, marginBottom: 14 }}>🏢 Company Info</Text>
+          {[{ label: 'Company', value: 'Reine Mande Ltd' }, { label: 'Location', value: 'London, UK' }, { label: 'Legal Email', value: 'hello@reinecare.com' }, { label: 'Platform', value: 'ReineCare' }, { label: 'Commission Rate', value: `${commissionRate}%` }].map((item) => (
+            <View key={item.label} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
+              <Text style={{ fontSize: 13, color: COLORS.textLight }}>{item.label}</Text>
+              <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.text }}>{item.value}</Text>
+            </View>
+          ))}
+        </View>
+        <TouchableOpacity style={{ backgroundColor: '#FEE2E2', borderRadius: 16, paddingVertical: 14, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 }} onPress={() => Alert.alert('Log Out', 'Are you sure?', [{ text: 'Cancel', style: 'cancel' }, { text: 'Log Out', style: 'destructive', onPress: onLogout }])}>
+          <Text style={{ fontSize: 18 }}>🚪</Text>
+          <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#991B1B' }}>Log Out</Text>
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
+  );
+
+  // ── MAIN RETURN ───────────────────────────────────────────────────────────────
+  return (
+    <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+      <View style={{ flex: 1 }}>
+        {activeTab === 'home' && renderHome()}
+        {activeTab === 'verify' && renderVerify()}
+        {activeTab === 'bookings' && renderAdminBookings()}
+        {activeTab === 'analytics' && (
+          <View style={{ flex: 1 }}>
+            <View style={{ backgroundColor: COLORS.admin, paddingTop: 50, paddingBottom: 20, paddingHorizontal: 24, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 }}>
+              <Text style={{ fontSize: 24, fontWeight: 'bold', color: COLORS.white }}>📊 Analytics</Text>
+              <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)', marginTop: 4 }}>Platform-wide insights</Text>
+            </View>
+            <AnalyticsDashboard allUsers={allUsers} allBookings={allBookings} />
+          </View>
+        )}
+        {activeTab === 'revenue' && <RevenueReport allUsers={allUsers} allBookings={allBookings} />}
+        {activeTab === 'payments' && renderPayments()}
+        {activeTab === 'matching' && (
+          <View style={{ flex: 1 }}>
+            <View style={{ backgroundColor: COLORS.admin, paddingTop: 50, paddingBottom: 20, paddingHorizontal: 24, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 }}>
+              <Text style={{ fontSize: 24, fontWeight: 'bold', color: COLORS.white }}>🔗 Patient Matching</Text>
+            </View>
+            <AdminMatching adminId={user.id} allUsers={allUsers} />
+          </View>
+        )}
+        {activeTab === 'users' && renderUsers()}
+        {activeTab === 'settings' && renderSettings()}
+        {activeTab === 'profile' && renderAdminProfile()}
+      </View>
+      {/* Bottom tabs */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ backgroundColor: COLORS.white, borderTopWidth: 1, borderTopColor: COLORS.border, maxHeight: 70 }} contentContainerStyle={{ paddingBottom: 24, paddingTop: 10 }}>
+        <View style={{ flexDirection: 'row' }}>
+          {tabs.map((tab) => (
+            <TouchableOpacity key={tab.id} style={{ alignItems: 'center', paddingHorizontal: 14 }} onPress={() => setActiveTab(tab.id)}>
+              <View style={{ width: activeTab === tab.id ? 36 : 0, height: 3, backgroundColor: COLORS.admin, borderRadius: 2, marginBottom: 6 }} />
+              <Text style={{ fontSize: activeTab === tab.id ? 22 : 20, marginBottom: 2 }}>{tab.icon}</Text>
+              <Text style={{ fontSize: 9, fontWeight: activeTab === tab.id ? '700' : '500', color: activeTab === tab.id ? COLORS.admin : COLORS.gray }}>{tab.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
+// ─── ROOT APP COMPONENT ───────────────────────────────────────────────────────
+export default function App() {
+  const [screen, setScreen] = useState('splash');
+  const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [appLanguage, setAppLanguage] = useState('en');
+
+  const t = (key) => TRANSLATIONS[appLanguage]?.[key] || TRANSLATIONS['en']?.[key] || key;
+
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      setUser(null);
+      setProfile(null);
+      setScreen('splash');
+    } catch (error) {
+      console.log('Logout error:', error.message);
+    }
+  };
+
+  const renderDashboard = () => {
+    if (!profile) return null;
+    if (profile.role === 'admin') return <AdminDashboard user={user} profile={profile} onLogout={handleLogout} />;
+    if (profile.role === 'doctor') return <DoctorDashboard user={user} profile={profile} onLogout={handleLogout} />;
+    if (profile.role === 'pharmacy') return <PharmacyDashboard user={user} profile={profile} onLogout={handleLogout} />;
+    return <PatientDashboard user={user} profile={profile} onLogout={handleLogout} />;
+  };
+
+  useEffect(() => {
+    const notifListener = Notifications.addNotificationReceivedListener(n => {
+      console.log('Notification received:', n);
+    });
+    const responseListener = Notifications.addNotificationResponseReceivedListener(r => {
+      console.log('Notification response:', r);
+    });
+    const appStateListener = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'background') {
+        clearCache('doctors-');
+        clearCache('notifications-');
+      }
+    });
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user) {
+        try {
+          setUser(session.user);
+          const { data: profileData } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+          setProfile(profileData);
+          setScreen('main');
+          await registerForPushNotifications(session.user.id);
+        } catch (error) {
+          console.log('Session restore error:', error.message);
+          setScreen('splash');
+        }
+      } else {
+        setScreen('splash');
+      }
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setProfile(null);
+        setScreen('splash');
+      }
+    });
+    return () => {
+      notifListener.remove();
+      responseListener.remove();
+      appStateListener?.remove();
+      subscription?.unsubscribe();
+    };
+  }, []);
+
+  return (
+    <ErrorBoundary>
+      <LanguageContext.Provider value={{ language: appLanguage, setLanguage: setAppLanguage, t }}>
+        <StatusBar barStyle="light-content" />
+        {screen === 'splash' && (
+          <SplashScreen onDone={() => setScreen('onboarding')} />
+        )}
+        {screen === 'onboarding' && (
+          <OnboardingScreen
+            onDone={() => setScreen('login')}
+            onLogin={() => setScreen('login')}
+          />
+        )}
+        {screen === 'login' && (
+          <LoginScreen
+            onLogin={(u, p) => {
+              setUser(u);
+              setProfile(p);
+              setScreen('main');
+            }}
+            onRegister={() => setScreen('register')}
+          />
+        )}
+        {screen === 'register' && (
+          <RegisterScreen
+            onRegister={() => setScreen('login')}
+            onLogin={() => setScreen('login')}
+          />
+        )}
+        {screen === 'main' && renderDashboard()}
+      </LanguageContext.Provider>
+    </ErrorBoundary>
+  );
+}
